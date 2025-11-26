@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{url_for('static', filename='styles.css')}}">
+    <title>Discover Music - SoundMatch</title>
+</head>
+<body class="discover-page">
+    <!-- Navigation -->
+    <a href="{{url_for('dashboard')}}" class="nav-back-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+        Dashboard
+    </a>
+    
+    <a href="{{url_for('logout')}}" class="nav-profile-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+        Logout
+    </a>
+    
+    <div class="discover-container">
+        <h1 class="discover-title">Discover Music</h1>
+        
+        <!-- Dropdown Menu -->
+        <div class="dropdown-container">
+            <div class="dropdown" id="typeDropdown">
+                <div class="dropdown-header" id="dropdownHeader" onclick="toggleDropdown()">
+                    <span id="selectedType">Artist</span>
+                    <span class="dropdown-arrow">▼</span>
+                </div>
+                <div class="dropdown-menu" id="dropdownMenu">
+                    <div class="dropdown-item" onclick="selectType('Song')">Song</div>
+                    <div class="dropdown-item active" onclick="selectType('Artist')">Artist</div>
+                    <div class="dropdown-item" onclick="selectType('Category')">Category</div>
+                    <div class="dropdown-item" onclick="selectType('Genre')">Genre</div>
+                    <div class="dropdown-item" onclick="selectType('Playlist')">Playlist</div>
+                    <div class="dropdown-item" onclick="selectType('Song link')">Song link</div>
+                    <div class="dropdown-item" onclick="selectType('Artist link')">Artist link</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Dynamic Search Section -->
+        <div class="selection-container">
+            <div class="selection-card">
+                <input type="text" 
+                       id="searchInput" 
+                       class="search-input" 
+                       placeholder="Search...">
+                
+                <div class="results-box" id="searchResults">
+                    <div class="loading">Select a type and start searching...</div>
+                </div>
+                
+                <div class="selected-items" id="selectedItems">
+                    <!-- Selected items will appear here -->
+                </div>
+            </div>
+        </div>
+        
+        <button class="get-recommendations-btn" id="getRecsBtn" onclick="getRecommendations()" disabled>
+            Get Recommendations
+        </button>
+    </div>
+
+    <script>
+        // State management
+        let currentType = 'Artist';
+        let selectedItems = [];
+        let allGenres = [];
+        let searchTimeout;
+        let dropdownOpen = false;
+
+        // Load genres on page load
+        loadGenres();
+
+        // Initialize button state
+        updateButton();
+
+        // Dropdown functionality
+        function toggleDropdown() {
+            dropdownOpen = !dropdownOpen;
+            const menu = document.getElementById('dropdownMenu');
+            menu.style.display = dropdownOpen ? 'block' : 'none';
+        }
+
+        function selectType(type) {
+            currentType = type;
+            document.getElementById('selectedType').textContent = type;
+            
+            // Update active state
+            document.querySelectorAll('.dropdown-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.textContent.trim() === type) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // Update placeholder
+            const placeholder = getPlaceholderForType(type);
+            document.getElementById('searchInput').placeholder = placeholder;
+            
+            // Clear previous results
+            document.getElementById('searchResults').innerHTML = '<div class="loading">Select a type and start searching...</div>';
+            document.getElementById('searchInput').value = '';
+            
+            // Close dropdown
+            toggleDropdown();
+            
+            // Load appropriate data
+            if (type === 'Genre') {
+                displayGenres(allGenres);
+            } else if (type === 'Category') {
+                displayCategories();
+            }
+        }
+
+        function getPlaceholderForType(type) {
+            const placeholders = {
+                'Song': 'Search for a song...',
+                'Artist': 'Search for an artist...',
+                'Category': 'Select a category...',
+                'Genre': 'Search or select a genre...',
+                'Playlist': 'Enter playlist name or ID...',
+                'Song link': 'Paste Spotify song URL...',
+                'Artist link': 'Paste Spotify artist URL...'
+            };
+            return placeholders[type] || 'Search...';
+        }
+
+        // Search input handler
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            const query = e.target.value.trim();
+            
+            if (currentType === 'Genre') {
+                filterGenres(query);
+                return;
+            }
+            
+            if (currentType === 'Category') {
+                // Categories are pre-loaded, just filter
+                return;
+            }
+            
+            if (currentType === 'Song link' || currentType === 'Artist link') {
+                // Handle URL parsing
+                if (query.length > 10) {
+                    parseSpotifyLink(query);
+                }
+                return;
+            }
+            
+            if (query.length < 2) {
+                document.getElementById('searchResults').innerHTML = '<div class="loading">Type at least 2 characters...</div>';
+                return;
+            }
+            
+            searchTimeout = setTimeout(() => {
+                if (currentType === 'Song') {
+                    searchTracks(query);
+                } else if (currentType === 'Artist') {
+                    searchArtists(query);
+                } else if (currentType === 'Playlist') {
+                    searchPlaylists(query);
+                }
+            }, 500);
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('typeDropdown');
+            if (!dropdown.contains(e.target) && dropdownOpen) {
+                toggleDropdown();
+            }
+        });
+
+        async function loadGenres() {
+            try {
+                const response = await fetch('/api/public/genres');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    allGenres = data.genres;
+                    if (currentType === 'Genre') {
+                        displayGenres(allGenres);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading genres:', error);
+            }
+        }
+
+        function displayGenres(genres) {
+            const resultsBox = document.getElementById('searchResults');
+            
+            if (genres.length === 0) {
+                resultsBox.innerHTML = '<div class="loading">No genres found</div>';
+                return;
+            }
+            
+            resultsBox.innerHTML = genres.map(genre => `
+                <div class="result-item ${selectedItems.find(item => item.type === 'genre' && item.id === genre) ? 'selected' : ''}" 
+                     onclick="toggleItem('genre', '${genre}', '${genre}')">
+                    ${genre}
+                </div>
+            `).join('');
+        }
+
+        function filterGenres(query) {
+            if (!query) {
+                displayGenres(allGenres);
+                return;
+            }
+            
+            const filtered = allGenres.filter(genre => 
+                genre.toLowerCase().includes(query.toLowerCase())
+            );
+            displayGenres(filtered);
+        }
+
+        function displayCategories() {
+            const categories = [
+                { id: 'pop', name: 'Pop' },
+                { id: 'rock', name: 'Rock' },
+                { id: 'hip-hop', name: 'Hip Hop' },
+                { id: 'electronic', name: 'Electronic' },
+                { id: 'jazz', name: 'Jazz' },
+                { id: 'classical', name: 'Classical' },
+                { id: 'country', name: 'Country' },
+                { id: 'r-n-b', name: 'R&B' },
+                { id: 'metal', name: 'Metal' },
+                { id: 'indie', name: 'Indie' },
+                { id: 'folk', name: 'Folk' },
+                { id: 'reggae', name: 'Reggae' }
+            ];
+            
+            const resultsBox = document.getElementById('searchResults');
+            resultsBox.innerHTML = categories.map(cat => `
+                <div class="result-item ${selectedItems.find(item => item.type === 'category' && item.id === cat.id) ? 'selected' : ''}" 
+                     onclick="toggleItem('category', '${cat.id}', '${cat.name}')">
+                    ${cat.name}
+                </div>
+            `).join('');
+        }
+
+        async function searchArtists(query) {
+            const resultsBox = document.getElementById('searchResults');
+            resultsBox.innerHTML = '<div class="loading">Searching...</div>';
+            
+            try {
+                const response = await fetch(`/api/public/search/artists?q=${encodeURIComponent(query)}&limit=20`);
+                const data = await response.json();
+                
+                // Check if we have artists data (even if empty)
+                const artists = data.artists || [];
+                
+                if (response.ok) {
+                    if (artists.length > 0) {
+                        resultsBox.innerHTML = artists.map(artist => {
+                            const artistNameEscaped = artist.name.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                            const artistDataEncoded = btoa(JSON.stringify(artist));
+                            return `
+                                <div class="result-item ${selectedItems.find(item => item.type === 'artist' && item.id === artist.id) ? 'selected' : ''}" 
+                                     data-type="artist"
+                                     data-id="${artist.id}"
+                                     data-name="${artistNameEscaped}"
+                                     data-artist-data="${artistDataEncoded}">
+                                    ${artist.image_url ? `<img src="${artist.image_url}" alt="${artistNameEscaped}">` : ''}
+                                    <div>
+                                        <div><strong>${artistNameEscaped}</strong></div>
+                                        <div>${(artist.genres || []).slice(0, 2).join(', ')}</div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                        
+                        // Add event listeners to all artist items
+                        resultsBox.querySelectorAll('.result-item[data-type="artist"]').forEach(item => {
+                            item.addEventListener('click', function() {
+                                const type = this.getAttribute('data-type');
+                                const id = this.getAttribute('data-id');
+                                const name = this.getAttribute('data-name');
+                                const artistDataEncoded = this.getAttribute('data-artist-data');
+                                let artistData = null;
+                                try {
+                                    artistData = JSON.parse(atob(artistDataEncoded));
+                                } catch (e) {
+                                    console.error('Error parsing artist data:', e);
+                                }
+                                toggleItem(type, id, name, artistData);
+                            });
+                        });
+                    } else {
+                        // No artists found but request was successful
+                        resultsBox.innerHTML = '<div class="loading">No artists found. Try a different search term.</div>';
+                    }
+                } else {
+                    // API returned an error response
+                    const errorMsg = data.error || 'Search failed. Please try again.';
+                    resultsBox.innerHTML = `<div class="error">${errorMsg}</div>`;
+                }
+            } catch (error) {
+                console.error('Error searching artists:', error);
+                // Network error or JSON parsing error
+                resultsBox.innerHTML = '<div class="error">Network error. Please check your connection and try again.</div>';
+            }
+        }
+
+        async function searchTracks(query) {
+            const resultsBox = document.getElementById('searchResults');
+            resultsBox.innerHTML = '<div class="loading">Searching...</div>';
+            
+            try {
+                const response = await fetch(`/api/public/search/tracks?q=${encodeURIComponent(query)}&limit=20`);
+                const data = await response.json();
+                
+                if (response.ok && data.tracks.length > 0) {
+                    resultsBox.innerHTML = data.tracks.map(track => {
+                        // Extract artist name - handle both string and array formats
+                        let artistName = 'Unknown Artist';
+                        if (track.artist) {
+                            artistName = track.artist;
+                        } else if (track.artists && Array.isArray(track.artists)) {
+                            if (track.artists.length > 0) {
+                                artistName = typeof track.artists[0] === 'string' 
+                                    ? track.artists[0] 
+                                    : track.artists[0].name || 'Unknown Artist';
+                            }
+                        }
+                        
+                        // Get image URL
+                        const imageUrl = track.image_url || (track.album && track.album.images && track.album.images[0] ? track.album.images[0].url : null);
+                        
+                        // Escape track name for HTML
+                        const trackNameEscaped = (track.name || 'Unknown Track').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                        const artistNameEscaped = artistName.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                        
+                        // Store track data in data attribute (base64 encoded to avoid quote issues)
+                        const trackDataEncoded = btoa(JSON.stringify(track));
+                        
+                        return `
+                            <div class="result-item ${selectedItems.find(item => item.type === 'track' && item.id === track.id) ? 'selected' : ''}" 
+                                 data-type="track"
+                                 data-id="${track.id}"
+                                 data-name="${trackNameEscaped}"
+                                 data-track-data="${trackDataEncoded}">
+                                ${imageUrl ? `<img src="${imageUrl}" alt="${trackNameEscaped}">` : ''}
+                                <div>
+                                    <div><strong>${trackNameEscaped}</strong></div>
+                                    <div>${artistNameEscaped}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    // Add event listeners to all track items
+                    resultsBox.querySelectorAll('.result-item[data-type="track"]').forEach(item => {
+                        item.addEventListener('click', function() {
+                            const type = this.getAttribute('data-type');
+                            const id = this.getAttribute('data-id');
+                            const name = this.getAttribute('data-name');
+                            const trackDataEncoded = this.getAttribute('data-track-data');
+                            let trackData = null;
+                            try {
+                                trackData = JSON.parse(atob(trackDataEncoded));
+                            } catch (e) {
+                                console.error('Error parsing track data:', e);
+                            }
+                            toggleItem(type, id, name, trackData);
+                        });
+                    });
+                } else {
+                    resultsBox.innerHTML = '<div class="loading">No tracks found</div>';
+                }
+            } catch (error) {
+                console.error('Error searching tracks:', error);
+                resultsBox.innerHTML = '<div class="error">Search failed</div>';
+            }
+        }
+
+        async function searchPlaylists(query) {
+            // Playlist search would require additional API endpoint
+            // For now, show a message
+            document.getElementById('searchResults').innerHTML = 
+                '<div class="loading">Playlist search coming soon. Use playlist ID or link.</div>';
+        }
+
+        function parseSpotifyLink(url) {
+            // Extract ID from Spotify URL
+            const patterns = {
+                'Song link': /spotify\.com\/track\/([a-zA-Z0-9]+)/,
+                'Artist link': /spotify\.com\/artist\/([a-zA-Z0-9]+)/
+            };
+            
+            const pattern = patterns[currentType];
+            if (pattern) {
+                const match = url.match(pattern);
+                if (match && match[1]) {
+                    const id = match[1];
+                    // Add the ID as a selected item
+                    if (currentType === 'Song link') {
+                        // Fetch track info
+                        fetchTrackById(id);
+                    } else if (currentType === 'Artist link') {
+                        // Fetch artist info
+                        fetchArtistById(id);
+                    }
+                } else {
+                    document.getElementById('searchResults').innerHTML = 
+                        '<div class="error">Invalid Spotify URL. Please paste a valid link.</div>';
+                }
+            }
+        }
+
+        async function fetchTrackById(trackId) {
+            try {
+                const response = await fetch(`/api/public/track/${trackId}`);
+                const data = await response.json();
+                
+                if (response.ok && data.track) {
+                    const track = data.track;
+                    toggleItem('track', track.id, track.name, track);
+                    document.getElementById('searchInput').value = '';
+                    document.getElementById('searchResults').innerHTML = 
+                        `<div class="loading">✓ Added: ${track.name}</div>`;
+                } else {
+                    document.getElementById('searchResults').innerHTML = 
+                        '<div class="error">Track not found</div>';
+                }
+            } catch (error) {
+                console.error('Error fetching track:', error);
+                document.getElementById('searchResults').innerHTML = 
+                    '<div class="error">Failed to fetch track</div>';
+            }
+        }
+
+        async function fetchArtistById(artistId) {
+            try {
+                const response = await fetch(`/api/public/artist/${artistId}`);
+                const data = await response.json();
+                
+                if (response.ok && data.artist) {
+                    const artist = data.artist;
+                    toggleItem('artist', artist.id, artist.name, artist);
+                    document.getElementById('searchInput').value = '';
+                    document.getElementById('searchResults').innerHTML = 
+                        `<div class="loading">✓ Added: ${artist.name}</div>`;
+                } else {
+                    document.getElementById('searchResults').innerHTML = 
+                        '<div class="error">Artist not found</div>';
+                }
+            } catch (error) {
+                console.error('Error fetching artist:', error);
+                document.getElementById('searchResults').innerHTML = 
+                    '<div class="error">Failed to fetch artist</div>';
+            }
+        }
+
+        function toggleItem(type, id, name, fullData = null) {
+            const index = selectedItems.findIndex(item => item.id === id && item.type === type);
+            
+            if (index > -1) {
+                // Remove
+                selectedItems.splice(index, 1);
+            } else {
+                // Add (max 5 total)
+                if (selectedItems.length < 5) {
+                    selectedItems.push({
+                        type: type,
+                        id: id,
+                        name: name,
+                        data: fullData
+                    });
+                } else {
+                    alert('Maximum 5 items allowed');
+                    return;
+                }
+            }
+            
+            updateSelectedItems();
+            updateButton();
+            refreshResults();
+        }
+
+        function refreshResults() {
+            const query = document.getElementById('searchInput').value.trim();
+            
+            if (currentType === 'Genre') {
+                filterGenres(query);
+            } else if (currentType === 'Category') {
+                displayCategories();
+            } else if (currentType === 'Song' && query.length >= 2) {
+                searchTracks(query);
+            } else if (currentType === 'Artist' && query.length >= 2) {
+                searchArtists(query);
+            }
+        }
+
+        function updateSelectedItems() {
+            const container = document.getElementById('selectedItems');
+            container.innerHTML = selectedItems.map((item, index) => `
+                <span class="selected-tag">
+                    ${item.name} (${item.type})
+                    <button onclick="removeItem(${index})">×</button>
+                </span>
+            `).join('');
+        }
+
+        function removeItem(index) {
+            selectedItems.splice(index, 1);
+            updateSelectedItems();
+            updateButton();
+            refreshResults();
+        }
+
+        function updateButton() {
+            const btn = document.getElementById('getRecsBtn');
+            const hasSelections = selectedItems.length > 0;
+            btn.disabled = !hasSelections;
+            
+            if (hasSelections) {
+                btn.textContent = `Get Recommendations (${selectedItems.length} ${selectedItems.length === 1 ? 'item' : 'items'})`;
+            } else {
+                btn.textContent = 'Get Recommendations';
+            }
+        }
+
+        async function getRecommendations() {
+            console.log('getRecommendations called');
+            console.log('Selected items:', selectedItems);
+            
+            if (selectedItems.length === 0) {
+                alert('Please select at least one item');
+                return;
+            }
+            
+            // Build seeds based on selected items
+            const seeds = {
+                artists: [],
+                tracks: [],
+                genres: []
+            };
+            
+            // Process selected items
+            for (const item of selectedItems) {
+                if (item.type === 'artist') {
+                    seeds.artists.push(item.id);
+                } else if (item.type === 'track' || item.type === 'song') {
+                    seeds.tracks.push(item.id);
+                } else if (item.type === 'genre') {
+                    seeds.genres.push(item.id);
+                } else if (item.type === 'category') {
+                    // Category is treated as a genre
+                    seeds.genres.push(item.id);
+                }
+            }
+            
+            // For artists, also extract their genres for better recommendations
+            if (seeds.artists.length > 0) {
+                for (const item of selectedItems) {
+                    if (item.type === 'artist' && item.data && item.data.genres) {
+                        // Add first genre from each artist
+                        const artistGenres = item.data.genres.filter(g => allGenres.includes(g));
+                        if (artistGenres.length > 0 && seeds.genres.length < 3) {
+                            seeds.genres.push(artistGenres[0]);
+                        }
+                    }
+                }
+            }
+            
+            console.log('Seeds built:', seeds);
+            
+            // Validate we have at least one seed
+            if (seeds.artists.length === 0 && seeds.tracks.length === 0 && seeds.genres.length === 0) {
+                alert('No valid seeds found. Please select at least one artist, track, or genre.');
+                return;
+            }
+            
+            // Save to sessionStorage
+            try {
+                sessionStorage.setItem('recommendationSeeds', JSON.stringify(seeds));
+                console.log('Seeds saved to sessionStorage');
+            } catch (e) {
+                console.error('Error saving to sessionStorage:', e);
+                alert('Error saving selections. Please try again.');
+                return;
+            }
+            
+            // Redirect to recommendations page
+            console.log('Redirecting to /recommendations');
+            window.location.href = '/recommendations';
+        }
+    </script>
+</body>
+</html>

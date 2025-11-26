@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{url_for('static', filename='styles.css')}}">
+    <title>Saved Songs - SoundMatch</title>
+</head>
+<body class="saved-page">
+    <h1 class="saved-title">Your Saved Songs</h1>
+    
+    <!-- Account Icon -->
+    <div class="account-menu">
+        <button class="account-icon" onclick="toggleAccountMenu()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+        </button>
+        <div class="account-dropdown" id="accountDropdown">
+            {% if current_user.spotify_refresh_token %}
+                <a href="{{url_for('logout')}}" class="account-item">Logout</a>
+            {% else %}
+                <a href="{{url_for('login_spotify')}}" class="account-item">Connect Spotify</a>
+                <a href="{{url_for('logout')}}" class="account-item">Logout</a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Hamburger Menu -->
+    <button class="hamburger" onclick="toggleMenu()">
+        <span class="menuIcon">
+            <span class="hamburger-line"></span>
+            <span class="hamburger-line"></span>
+            <span class="hamburger-line"></span>
+        </span>
+        <span class="closeIcon">
+            <span class="close-line close-line-1"></span>
+            <span class="close-line close-line-2"></span>
+        </span>
+    </button>
+    
+    <!-- Navigation Menu -->
+    <ul class="menu" id="navMenu">
+        <li><a href="{{url_for('dashboard')}}" class="menuItem">Dashboard</a></li>
+        <li><a href="{{url_for('discover')}}" class="menuItem">Discover Music</a></li>
+        <li><a href="{{url_for('recommendations')}}" class="menuItem">Recommendations</a></li>
+        <li><a href="{{url_for('saved')}}" class="menuItem">Saved Songs</a></li>
+        <li><a href="{{url_for('logout')}}" class="menuItem">Logout</a></li>
+    </ul>
+    
+    <!-- Saved Tracks Container -->
+    <div class="saved-content">
+        <div id="savedTracksContainer" class="tracks-container">
+            <p class="loading">Loading your saved songs...</p>
+        </div>
+    </div>
+    
+    <script>
+        function toggleMenu() {
+            const menu = document.getElementById('navMenu');
+            if (!menu) {
+                console.error('Menu not found');
+                return;
+            }
+            
+            const hamburger = document.querySelector('.hamburger');
+            if (!hamburger) {
+                console.error('Hamburger not found');
+                return;
+            }
+            
+            const menuIcon = hamburger.querySelector('.menuIcon');
+            const closeIcon = hamburger.querySelector('.closeIcon');
+            
+            // Toggle menu visibility
+            const isOpen = menu.classList.contains('showMenu');
+            
+            if (isOpen) {
+                // Close menu
+                menu.classList.remove('showMenu');
+                if (closeIcon) {
+                    closeIcon.style.display = 'none';
+                    closeIcon.classList.remove('show');
+                }
+                if (menuIcon) {
+                    menuIcon.style.display = 'flex';
+                    menuIcon.classList.remove('hidden');
+                }
+            } else {
+                // Open menu
+                menu.classList.add('showMenu');
+                if (closeIcon) {
+                    closeIcon.style.display = 'flex';
+                    closeIcon.classList.add('show');
+                }
+                if (menuIcon) {
+                    menuIcon.style.display = 'none';
+                    menuIcon.classList.add('hidden');
+                }
+            }
+        }
+        
+        // Close menu when clicking on menu items
+        document.addEventListener('DOMContentLoaded', function() {
+            const menuItems = document.querySelectorAll('.menuItem');
+            menuItems.forEach(function(menuItem) {
+                menuItem.addEventListener('click', function() {
+                    setTimeout(toggleMenu, 100);
+                });
+            });
+            
+            // Close menu when clicking outside
+            document.addEventListener('click', function(event) {
+                const menu = document.getElementById('navMenu');
+                const hamburger = document.querySelector('.hamburger');
+                
+                if (menu && hamburger && 
+                    !menu.contains(event.target) && 
+                    !hamburger.contains(event.target) &&
+                    menu.classList.contains('showMenu')) {
+                    toggleMenu();
+                }
+            });
+        });
+        
+        function toggleAccountMenu() {
+            const dropdown = document.getElementById('accountDropdown');
+            dropdown.classList.toggle('show');
+        }
+        
+        window.onclick = function(event) {
+            if (!event.target.matches('.account-icon') && !event.target.closest('.account-menu')) {
+                const dropdown = document.getElementById('accountDropdown');
+                if (dropdown.classList.contains('show')) {
+                    dropdown.classList.remove('show');
+                }
+            }
+        }
+        
+        // Load saved tracks
+        async function loadSavedTracks() {
+            try {
+                const response = await fetch('/api/saved-tracks?per_page=50');
+                const data = await response.json();
+                
+                const container = document.getElementById('savedTracksContainer');
+                if (data.saved_tracks && data.saved_tracks.length > 0) {
+                    container.innerHTML = data.saved_tracks.map(track => `
+                        <div class="track-card">
+                            ${track.track_image_url ? `<img src="${track.track_image_url}" alt="${track.track_name}" class="track-image">` : 
+                                `<div class="track-image-placeholder"><svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>`}
+                            <div class="track-info">
+                                <h3 class="track-name">${track.track_name}</h3>
+                                <p class="track-artist">${track.artist_name}</p>
+                                ${track.album_name ? `<p class="track-album">${track.album_name}</p>` : ''}
+                            </div>
+                            <div class="track-actions">
+                                ${track.spotify_url ? `<a href="${track.spotify_url}" target="_blank" class="spotify-link-btn" title="Open in Spotify"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.3.421-1.02.599-1.56.3z"/></svg></a>` : ''}
+                                <button class="delete-btn" onclick="deleteTrack(${track.id})" title="Remove from saved">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p class="no-tracks">You haven\'t saved any songs yet. Start discovering music!</p>';
+                }
+            } catch (error) {
+                console.error('Error loading saved tracks:', error);
+                document.getElementById('savedTracksContainer').innerHTML = '<p class="error">Error loading saved tracks. Please try again.</p>';
+            }
+        }
+        
+        async function deleteTrack(trackId) {
+            if (!confirm('Remove this song from your saved list?')) return;
+            
+            try {
+                const response = await fetch(`/api/saved-tracks/${trackId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    loadSavedTracks();
+                } else {
+                    alert('Failed to remove song');
+                }
+            } catch (error) {
+                console.error('Error deleting track:', error);
+                alert('Error removing song');
+            }
+        }
+        
+        loadSavedTracks();
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{url_for('static', filename='styles.css')}}">
+    <title>Your Recommendations - SoundMatch</title>
+</head>
+<body class="recommendations-page">
+    <!-- Navigation -->
+    <a href="{{url_for('dashboard')}}" class="nav-back-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+        Dashboard
+    </a>
+    
+    <a href="{{url_for('logout')}}" class="nav-profile-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+        Logout
+    </a>
+    
+    <div class="recommendations-container">
+        <h1 class="recommendations-title">Your Recommendations</h1>
+        
+        <!-- Previous Recommendations Sessions List -->
+        <div id="sessionsList" class="sessions-list" style="display: none;">
+            <h2 class="sessions-title">Previous Recommendations</h2>
+            <div id="sessionsContainer" class="sessions-container">
+                <!-- Sessions will be loaded here -->
+            </div>
+        </div>
+        
+        <!-- Regenerate Button (shown when viewing tracks) -->
+        <div id="regenerateSection" class="regenerate-section" style="display: none;">
+            <button class="action-btn regenerate-btn" onclick="regenerateRecommendations()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                </svg>
+                Regenerate Recommendations
+            </button>
+        </div>
+        
+        <div class="player-container">
+        <div id="loadingState" class="loading">
+            Loading recommendations...
+        </div>
+        
+        <div id="playerCard" class="player-card" style="display: none;">
+            <div class="album-art" id="albumArt">
+                <img id="trackImage" src="" alt="Album Art" style="display: none;">
+                <div class="image-placeholder" style="display: none;">
+                    <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18V5l12-2v13"></path>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <circle cx="18" cy="16" r="3"></circle>
+                    </svg>
+                </div>
+            </div>
+            
+            <div class="track-info">
+                <div class="track-name" id="trackName">Track Name</div>
+                <div class="artist-name" id="artistName">Artist Name</div>
+            </div>
+            
+            <div class="playback-controls">
+                <button class="control-btn" onclick="previousTrack()" title="Previous Track">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                    </svg>
+                    Previous
+                </button>
+                <button class="control-btn" onclick="nextTrack()" title="Next Track">
+                    Next
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="action-buttons">
+                <button class="action-btn like-btn" onclick="likeTrack()">Like</button>
+                {% if current_user.is_authenticated and current_user.auth_provider == 'spotify' %}
+                <button class="action-btn spotify-like-btn" onclick="addToSpotifyLibrary()">Add to Spotify</button>
+                {% endif %}
+            </div>
+            
+            <div class="play-buttons" id="playButtons">
+                <a id="spotifyPlayBtn" class="play-btn spotify-play-btn" href="#" target="_blank" rel="noopener noreferrer" style="display: none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z"/>
+                    </svg>
+                    Play on Spotify
+                </a>
+                <a id="youtubeWatchBtn" class="play-btn youtube-watch-btn" href="#" target="_blank" rel="noopener noreferrer" style="display: none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    </svg>
+                    Watch on YouTube
+                </a>
+            </div>
+        </div>
+        
+        <div id="noMoreState" class="no-more" style="display: none;">
+            <h2>No more recommendations!</h2>
+            <p>You've gone through all the recommendations.</p>
+            <a href="{{url_for('discover')}}" class="back-to-discover-btn">Discover More Music</a>
+        </div>
+    </div>
+
+    <script>
+        let recommendations = [];
+        let currentIndex = 0;
+        
+        // Helper function to extract artist name from track
+        function getArtistName(track) {
+            if (track.artists && Array.isArray(track.artists) && track.artists.length > 0) {
+                return typeof track.artists[0] === 'object' ? track.artists[0].name : track.artists[0];
+            }
+            return track.artist || 'Unknown Artist';
+        }
+        
+        // Helper function to extract image URL from track
+        function getImageUrl(track) {
+            if (track.image_url) return track.image_url;
+            if (track.album && typeof track.album === 'object' && track.album.images && track.album.images.length > 0) {
+                return track.album.images[0].url || track.album.images[1]?.url || track.album.images[2]?.url;
+            }
+            return null;
+        }
+        
+        // Helper function to extract Spotify URL from track
+        function getSpotifyUrl(track) {
+            return track.spotify_url || (track.external_urls && track.external_urls.spotify) || null;
+        }
+        
+        // Helper function to extract YouTube URL from track
+        function getYouTubeUrl(track) {
+            // Check if track has video_id
+            if (track.video_id) {
+                return `https://www.youtube.com/watch?v=${track.video_id}`;
+            }
+            // Check if track ID starts with youtube_
+            if (track.id && track.id.startsWith('youtube_')) {
+                const videoId = track.id.replace('youtube_', '');
+                return `https://www.youtube.com/watch?v=${videoId}`;
+            }
+            // Check if spotify_url is actually a YouTube URL (for YouTube tracks)
+            const spotifyUrl = track.spotify_url || (track.external_urls && track.external_urls.spotify);
+            if (spotifyUrl && spotifyUrl.includes('youtube.com')) {
+                return spotifyUrl;
+            }
+            return null;
+        }
+
+        // Global variables for current session
+        let currentSessionSeeds = null;
+        let currentSessionReason = null;
+        
+        // Load recommendations on page load
+        loadRecommendations();
+
+        async function loadRecommendations() {
+            try {
+                // Get seeds from sessionStorage
+                const seeds = JSON.parse(sessionStorage.getItem('recommendationSeeds'));
+                
+                if (!seeds || (!seeds.artists?.length && !seeds.genres?.length && !seeds.tracks?.length)) {
+                    // No seeds from discover page, check if user has previous recommendations
+                    await loadPreviousSessions();
+                    return;
+                }
+                
+                // Store seeds for regeneration
+                currentSessionSeeds = seeds;
+                
+                // Fetch new recommendations
+                await fetchNewRecommendations(seeds);
+                
+                // Clear sessionStorage after use
+                sessionStorage.removeItem('recommendationSeeds');
+                
+            } catch (error) {
+                console.error('Error loading recommendations:', error);
+                document.getElementById('loadingState').innerHTML = 
+                    '<div class="no-more"><h2>Error loading recommendations</h2><button onclick="location.reload()">Retry</button></div>';
+            }
+        }
+        
+        async function loadPreviousSessions() {
+            try {
+                const response = await fetch('/api/public/recommendations/sessions', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (response.status === 401 || !response.ok) {
+                    // User not logged in
+                    document.getElementById('loadingState').innerHTML = 
+                        '<div class="no-more"><h2>Please log in to view your recommendation history</h2><p><a href="/login" class="back-to-discover-btn">Login</a> or <a href="/discover" class="back-to-discover-btn">Discover Music</a></p></div>';
+                    return;
+                }
+                
+                if (data.sessions && data.sessions.length > 0) {
+                    // Show sessions list
+                    displaySessionsList(data.sessions);
+                } else {
+                    // No previous sessions, redirect to discover
+                    document.getElementById('loadingState').innerHTML = 
+                        '<div class="no-more"><h2>No previous recommendations</h2><p>Start discovering music to get recommendations!</p><a href="/discover" class="back-to-discover-btn">Discover Music</a></div>';
+                }
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+                document.getElementById('loadingState').innerHTML = 
+                    '<div class="no-more"><h2>Error loading previous recommendations</h2><p>Please <a href="/login">log in</a> or <a href="/discover">discover music</a></p></div>';
+            }
+        }
+        
+        function displaySessionsList(sessions) {
+            const sessionsContainer = document.getElementById('sessionsContainer');
+            const sessionsList = document.getElementById('sessionsList');
+            const loadingState = document.getElementById('loadingState');
+            
+            loadingState.style.display = 'none';
+            sessionsList.style.display = 'block';
+            
+            sessionsContainer.innerHTML = sessions.map((session, index) => {
+                const date = new Date(session.last_recommended);
+                const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                // Escape the seeds JSON properly for HTML attribute
+                const seedsJson = JSON.stringify(session.seeds || {}).replace(/\\/g, '\\\\').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                // Escape the reason for HTML attribute
+                const reasonEscaped = (session.reason || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                
+                return `
+                    <div class="session-card">
+                        <div class="session-info" onclick="loadSessionTracks('${reasonEscaped}', '${seedsJson}')">
+                            <h3 class="session-title">${(session.display || 'Recommendations').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h3>
+                            <p class="session-meta">${session.track_count} tracks • ${dateStr}</p>
+                        </div>
+                        <div class="session-actions">
+                            <button class="session-delete-btn" onclick="event.stopPropagation(); deleteSession('${reasonEscaped}')" title="Delete this recommendation session">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </button>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="session-arrow">
+                                <path d="M9 18l6-6-6-6"/>
+                            </svg>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        async function loadSessionTracks(reason, seedsJson) {
+            try {
+                currentSessionReason = reason;
+                // Parse seeds from JSON string
+                let seeds = {};
+                try {
+                    // Unescape HTML entities
+                    const cleanedJson = seedsJson.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\\\\/g, '\\');
+                    seeds = JSON.parse(cleanedJson);
+                    console.log('Loaded seeds:', seeds);
+                } catch (e) {
+                    console.error('Error parsing seeds:', e, 'Raw:', seedsJson);
+                    // If parsing fails, try to extract from stored reason
+                    try {
+                        const reasonData = JSON.parse(reason);
+                        if (reasonData.seeds) {
+                            seeds = reasonData.seeds;
+                        }
+                    } catch (e2) {
+                        console.error('Could not extract seeds from reason either:', e2);
+                        seeds = {};
+                    }
+                }
+                // Ensure seeds has the right structure
+                if (!seeds.artists) seeds.artists = [];
+                if (!seeds.genres) seeds.genres = [];
+                if (!seeds.tracks) seeds.tracks = [];
+                currentSessionSeeds = seeds;
+                console.log('Final seeds for regeneration:', currentSessionSeeds);
+                
+                // Hide sessions list
+                document.getElementById('sessionsList').style.display = 'none';
+                document.getElementById('loadingState').style.display = 'block';
+                
+                // Fetch tracks for this session - reason is already escaped, so we need to encode it for URL
+                const encodedReason = encodeURIComponent(reason);
+                const response = await fetch(`/api/public/recommendations/history?reason=${encodedReason}`, {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (data.recommendations && data.recommendations.length > 0) {
+                    // Convert history format to track format
+                    recommendations = data.recommendations.map(rec => ({
+                        id: rec.track_id,
+                        name: rec.track_name,
+                        artist: rec.artist_name,
+                        artists: [{name: rec.artist_name}],
+                        album: rec.album_name || null,
+                        image_url: rec.track_image_url,
+                        preview_url: rec.preview_url,
+                        spotify_url: rec.spotify_url,
+                        external_urls: {spotify: rec.spotify_url}
+                    }));
+                    
+                    currentIndex = 0;
+                    displayCurrentTrack();
+                    document.getElementById('regenerateSection').style.display = 'block';
+                } else {
+                    document.getElementById('loadingState').innerHTML = 
+                        '<div class="no-more"><h2>No tracks found for this session</h2></div>';
+                }
+            } catch (error) {
+                console.error('Error loading session tracks:', error);
+                document.getElementById('loadingState').innerHTML = 
+                    '<div class="no-more"><h2>Error loading tracks</h2><button onclick="location.reload()">Retry</button></div>';
+            }
+        }
+        
+        async function fetchNewRecommendations(seeds, excludeTrackIds = []) {
+            try {
+                document.getElementById('loadingState').style.display = 'block';
+                document.getElementById('sessionsList').style.display = 'none';
+                document.getElementById('playerCard').style.display = 'none';
+                document.getElementById('regenerateSection').style.display = 'none';
+                
+                // Ensure seeds have proper structure
+                const requestSeeds = {
+                    seed_artists: (seeds && seeds.artists) ? seeds.artists : [],
+                    seed_genres: (seeds && seeds.genres) ? seeds.genres : [],
+                    seed_tracks: (seeds && seeds.tracks) ? seeds.tracks : []
+                };
+                
+                // Add randomization for variation (only if regenerating)
+                const isRegenerating = excludeTrackIds.length > 0;
+                const requestBody = {
+                    ...requestSeeds,
+                    limit: 50
+                };
+                
+                if (isRegenerating) {
+                    // Add random variation parameters
+                    requestBody.min_popularity = Math.floor(Math.random() * 30); // 0-29
+                    requestBody.max_popularity = 50 + Math.floor(Math.random() * 50); // 50-100
+                    requestBody.target_energy = 0.3 + Math.random() * 0.4; // 0.3-0.7
+                    requestBody.target_valence = 0.3 + Math.random() * 0.4; // 0.3-0.7
+                    requestBody.exclude_tracks = excludeTrackIds;
+                }
+                
+                console.log('Fetching recommendations with seeds:', requestSeeds, isRegenerating ? '(regenerating with variation)' : '');
+                
+                const response = await fetch('/api/public/recommendations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.recommendations && data.recommendations.length > 0) {
+                    recommendations = data.recommendations;
+                    currentIndex = 0;
+                    
+                    // Store seeds for regeneration - always use the seeds we sent
+                    currentSessionSeeds = {
+                        artists: requestSeeds.seed_artists || [],
+                        genres: requestSeeds.seed_genres || [],
+                        tracks: requestSeeds.seed_tracks || []
+                    };
+                    console.log('Stored seeds for regeneration:', currentSessionSeeds);
+                    
+                    displayCurrentTrack();
+                    document.getElementById('regenerateSection').style.display = 'block';
+                } else {
+                    document.getElementById('loadingState').innerHTML = 
+                        '<div class="no-more"><h2>No recommendations found</h2><p>Try different artists or genres</p><button onclick="window.location.href=\'/discover\'">Try Again</button></div>';
+                }
+            } catch (error) {
+                console.error('Error fetching recommendations:', error);
+                document.getElementById('loadingState').innerHTML = 
+                    '<div class="no-more"><h2>Error loading recommendations</h2><button onclick="location.reload()">Retry</button></div>';
+            }
+        }
+        
+        async function regenerateRecommendations() {
+            console.log('Regenerate clicked, currentSessionSeeds:', currentSessionSeeds);
+            
+            if (!currentSessionSeeds) {
+                alert('No seeds available to regenerate. Please go to Discover page to create new recommendations.');
+                return;
+            }
+            
+            // Check if we have any seeds
+            const hasArtists = currentSessionSeeds.artists && currentSessionSeeds.artists.length > 0;
+            const hasGenres = currentSessionSeeds.genres && currentSessionSeeds.genres.length > 0;
+            const hasTracks = currentSessionSeeds.tracks && currentSessionSeeds.tracks.length > 0;
+            
+            if (!hasArtists && !hasGenres && !hasTracks) {
+                alert('No seeds available to regenerate. Please go to Discover page to create new recommendations.');
+                return;
+            }
+            
+            // Show loading
+            document.getElementById('playerCard').style.display = 'none';
+            document.getElementById('regenerateSection').style.display = 'none';
+            document.getElementById('loadingState').style.display = 'block';
+            document.getElementById('loadingState').innerHTML = 'Regenerating recommendations...';
+            
+            // Create varied seeds for different results
+            const variedSeeds = createVariedSeeds(currentSessionSeeds);
+            
+            // Get list of already recommended track IDs to exclude
+            const excludeTrackIds = recommendations.map(t => t.id).filter(id => id);
+            
+            // Fetch new recommendations with varied seeds
+            await fetchNewRecommendations(variedSeeds, excludeTrackIds);
+        }
+        
+        function createVariedSeeds(originalSeeds) {
+            // Create a copy to modify
+            const varied = {
+                artists: [...(originalSeeds.artists || [])],
+                genres: [...(originalSeeds.genres || [])],
+                tracks: [...(originalSeeds.tracks || [])]
+            };
+            
+            // Shuffle arrays to use different seed combinations
+            function shuffleArray(array) {
+                const shuffled = [...array];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+                return shuffled;
+            }
+            
+            // Shuffle and take different subsets
+            if (varied.artists.length > 1) {
+                varied.artists = shuffleArray(varied.artists).slice(0, Math.min(3, varied.artists.length));
+            }
+            if (varied.genres.length > 1) {
+                varied.genres = shuffleArray(varied.genres).slice(0, Math.min(2, varied.genres.length));
+            }
+            if (varied.tracks.length > 1) {
+                varied.tracks = shuffleArray(varied.tracks).slice(0, Math.min(2, varied.tracks.length));
+            }
+            
+            return varied;
+        }
+        
+        async function deleteSession(reason) {
+            if (!confirm('Are you sure you want to delete this recommendation session? This will remove all tracks from this session.')) {
+                return;
+            }
+            
+            try {
+                // Reason is already escaped from HTML, but we need to send it as-is in JSON
+                const response = await fetch('/api/public/recommendations/sessions', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        reason: reason
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('Recommendation session deleted successfully!');
+                    // Reload sessions list
+                    document.getElementById('sessionsList').style.display = 'none';
+                    document.getElementById('loadingState').style.display = 'block';
+                    document.getElementById('loadingState').innerHTML = 'Reloading sessions...';
+                    await loadPreviousSessions();
+                } else if (response.status === 401) {
+                    alert('Please log in to delete recommendation sessions.');
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to delete session'));
+                }
+            } catch (error) {
+                console.error('Error deleting session:', error);
+                alert('Error deleting session. Please try again.');
+            }
+        }
+
+        function displayCurrentTrack() {
+            if (currentIndex >= recommendations.length) {
+                showNoMoreState();
+                return;
+            }
+            
+            const track = recommendations[currentIndex];
+            
+            // Hide loading and sessions list, show player
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('sessionsList').style.display = 'none';
+            document.getElementById('playerCard').style.display = 'block';
+            document.getElementById('noMoreState').style.display = 'none';
+            
+            // Extract track name
+            const trackName = track.name || 'Unknown Track';
+            document.getElementById('trackName').textContent = trackName;
+            
+            // Extract and display artist name
+            const artistName = getArtistName(track);
+            document.getElementById('artistName').textContent = artistName;
+            
+            // Extract and display album image
+            const img = document.getElementById('trackImage');
+            const imageUrl = getImageUrl(track);
+            
+            // Hide placeholder first
+            const albumArt = document.getElementById('albumArt');
+            const placeholder = albumArt.querySelector('.image-placeholder');
+            if (placeholder) {
+                placeholder.style.display = 'none';
+            }
+            
+            if (imageUrl) {
+                img.src = imageUrl;
+                img.style.display = 'block';
+                img.onerror = function() {
+                    this.style.display = 'none';
+                    showImagePlaceholder();
+                };
+            } else {
+                img.style.display = 'none';
+                showImagePlaceholder();
+            }
+            
+            // Update play buttons visibility
+            updatePlayButtons(track);
+        }
+        
+        function updatePlayButtons(track) {
+            const spotifyBtn = document.getElementById('spotifyPlayBtn');
+            const youtubeBtn = document.getElementById('youtubeWatchBtn');
+            
+            // Check if this is a YouTube track
+            const isYouTubeTrack = track.source === 'youtube' || 
+                                 (track.id && track.id.startsWith('youtube_')) ||
+                                 track.video_id;
+            
+            // Get URLs
+            const spotifyUrl = getSpotifyUrl(track);
+            const youtubeUrl = getYouTubeUrl(track);
+            
+            // Show/hide Spotify button (only for non-YouTube tracks)
+            if (!isYouTubeTrack && spotifyUrl && !spotifyUrl.includes('youtube.com')) {
+                spotifyBtn.href = spotifyUrl;
+                spotifyBtn.style.display = 'inline-flex';
+            } else {
+                spotifyBtn.style.display = 'none';
+            }
+            
+            // Show/hide YouTube button
+            if (youtubeUrl || isYouTubeTrack) {
+                const finalYoutubeUrl = youtubeUrl || (spotifyUrl && spotifyUrl.includes('youtube.com') ? spotifyUrl : null);
+                if (finalYoutubeUrl) {
+                    youtubeBtn.href = finalYoutubeUrl;
+                    youtubeBtn.style.display = 'inline-flex';
+                } else {
+                    youtubeBtn.style.display = 'none';
+                }
+            } else {
+                youtubeBtn.style.display = 'none';
+            }
+        }
+        
+        function showImagePlaceholder() {
+            const albumArt = document.getElementById('albumArt');
+            let placeholder = albumArt.querySelector('.image-placeholder');
+            if (!placeholder) {
+                placeholder = document.createElement('div');
+                placeholder.className = 'image-placeholder';
+                placeholder.innerHTML = `
+                    <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 18V5l12-2v13"></path>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <circle cx="18" cy="16" r="3"></circle>
+                    </svg>
+                `;
+                albumArt.appendChild(placeholder);
+            }
+            placeholder.style.display = 'flex';
+        }
+
+        function previousTrack() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                displayCurrentTrack();
+            }
+        }
+
+        function nextTrack() {
+            currentIndex++;
+            displayCurrentTrack();
+        }
+
+        async function likeTrack() {
+            const track = recommendations[currentIndex];
+            
+            // Extract track data using helper functions
+            const trackId = track.id;
+            const trackName = track.name || 'Unknown Track';
+            const artistName = getArtistName(track);
+            const imageUrl = getImageUrl(track);
+            const spotifyUrl = getSpotifyUrl(track);
+            
+            let albumName = null;
+            if (track.album) {
+                albumName = typeof track.album === 'object' ? track.album.name : track.album;
+            }
+            
+            try {
+                // Try to save track if user is logged in
+                const response = await fetch('/api/saved-tracks', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        track_id: trackId,
+                        track_name: trackName,
+                        artist_name: artistName,
+                        album_name: albumName,
+                        track_image_url: imageUrl,
+                        spotify_url: spotifyUrl
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert('Saved to your favorites!');
+                } else if (response.status === 401) {
+                    alert('Please sign in to save tracks to your favorites!');
+                } else if (response.status === 409) {
+                    alert('This track is already in your favorites!');
+                } else {
+                    alert('Error: ' + (result.error || 'Failed to save track'));
+                }
+            } catch (error) {
+                console.error('Error saving track:', error);
+                alert('Error saving track. Please try again.');
+            }
+            
+            // Don't auto-advance, let user continue listening
+        }
+        
+        async function addToSpotifyLibrary() {
+            const track = recommendations[currentIndex];
+            const trackId = track.id;
+            
+            if (!trackId) {
+                alert('Invalid track ID');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/spotify/add-to-library', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        track_id: trackId
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert('Track added to your Spotify library!');
+                } else {
+                    alert('Error: ' + (result.error || 'Failed to add track to Spotify'));
+                }
+            } catch (error) {
+                console.error('Error adding to Spotify library:', error);
+                alert('Error adding track to Spotify. Please try again.');
+            }
+        }
+
+        function showNoMoreState() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('playerCard').style.display = 'none';
+            document.getElementById('noMoreState').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
