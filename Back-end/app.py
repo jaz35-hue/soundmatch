@@ -56,11 +56,29 @@ app = Flask(
 )
 
 # SECRET_KEY must be set via environment variable for security
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
+secret_key = os.environ.get('SECRET_KEY')
+if secret_key:
+    # Strip whitespace in case there are any leading/trailing spaces
+    secret_key = secret_key.strip()
+    
+app.config['SECRET_KEY'] = secret_key if secret_key else None
+
 if not app.config['SECRET_KEY']:
-    # Generate a warning in development, but fail in production
-    if os.environ.get('PRODUCTION', '').lower() in ('true', '1', 'yes'):
-        raise ValueError("SECRET_KEY environment variable is required in production!")
+    # Check if we're in production mode
+    production_mode = os.environ.get('PRODUCTION', '').lower() in ('true', '1', 'yes')
+    
+    if production_mode:
+        # In production, we must have a SECRET_KEY
+        secret_key_value = os.environ.get('SECRET_KEY', '')
+        print("ERROR: PRODUCTION mode detected but SECRET_KEY is missing or empty!")
+        print(f"DEBUG: PRODUCTION env var = '{os.environ.get('PRODUCTION')}'")
+        print(f"DEBUG: SECRET_KEY env var exists = {secret_key_value is not None}")
+        if secret_key_value:
+            print(f"DEBUG: SECRET_KEY env var length = {len(secret_key_value)}")
+            print(f"DEBUG: SECRET_KEY env var value (first 5 chars) = '{secret_key_value[:5]}...'")
+        else:
+            print("DEBUG: SECRET_KEY env var is None or empty")
+        raise ValueError("SECRET_KEY environment variable is required in production! Please set SECRET_KEY in your Render environment variables.")
     else:
         # Development fallback (NOT SECURE - only for local dev)
         app.config['SECRET_KEY'] = secrets.token_urlsafe(32)
