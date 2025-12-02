@@ -40,7 +40,18 @@ from spotify_api import (
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
-FRONTEND_DIR = (BASE_DIR.parent / "templates-front-end").resolve()
+
+# Try to find templates-front-end directory
+# First try parent directory (local development)
+FRONTEND_DIR = BASE_DIR.parent / "templates-front-end"
+# If not found, try same directory (Railway deployment with root = Back-end)
+if not FRONTEND_DIR.exists():
+    FRONTEND_DIR = BASE_DIR / "templates-front-end"
+# If still not found, try absolute path from repo root
+if not FRONTEND_DIR.exists():
+    FRONTEND_DIR = BASE_DIR.parent.parent / "templates-front-end"
+
+FRONTEND_DIR = FRONTEND_DIR.resolve()
 STATIC_DIR = FRONTEND_DIR / "static"
 INSTANCE_DIR = BASE_DIR / "instance"
 
@@ -48,6 +59,13 @@ INSTANCE_DIR = BASE_DIR / "instance"
 FRONTEND_DIR.mkdir(parents=True, exist_ok=True)
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Debug: Print template directory location
+print(f"📁 Template directory: {FRONTEND_DIR}")
+print(f"📁 Template directory exists: {FRONTEND_DIR.exists()}")
+if FRONTEND_DIR.exists():
+    templates = list(FRONTEND_DIR.glob("*.html"))
+    print(f"📁 Found {len(templates)} HTML templates: {[t.name for t in templates]}")
 
 app = Flask(
     __name__,
