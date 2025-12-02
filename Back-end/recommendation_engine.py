@@ -3,7 +3,8 @@ Main Recommendation Engine
 Orchestrates recommendations using multiple APIs with clear responsibilities:
 - Last.fm: Primary recommendation engine (similar artists, tracks, genres)
 - Spotify: Metadata provider (track details, search, artist info)
-- YouTube: Optional video discovery (can be disabled)
+
+YouTube support has been removed – recommendations no longer use the YouTube API.
 """
 
 from typing import List, Dict, Optional
@@ -25,28 +26,19 @@ from lastfm_api import (
     get_artist_tags,
     get_tag_top_artists
 )
-from youtube_api import (
-    search_track_on_youtube,
-    get_related_videos,
-    rank_videos_by_popularity
-)
-
-
 class RecommendationEngine:
     """
     Main recommendation engine that coordinates between APIs.
     """
     
-    def __init__(self, spotify_token: str, use_youtube: bool = False):
+    def __init__(self, spotify_token: str):
         """
         Initialize the recommendation engine.
         
         Args:
             spotify_token: Valid Spotify access token
-            use_youtube: Whether to include YouTube recommendations (default: False)
         """
         self.spotify_token = spotify_token
-        self.use_youtube = use_youtube
     
     def get_recommendations(
         self,
@@ -67,8 +59,6 @@ class RecommendationEngine:
         Returns:
             dict: {
                 'tracks': List of recommended tracks (Spotify format),
-                'seed_videos': List of YouTube videos for seed tracks (if use_youtube),
-                'youtube_videos': List of YouTube recommendations (if use_youtube),
                 'sources': Dict showing which APIs were used
             }
         """
@@ -87,12 +77,9 @@ class RecommendationEngine:
         
         result = {
             'tracks': [],
-            'seed_videos': [],
-            'youtube_videos': [],
             'sources': {
                 'lastfm': False,
-                'spotify': False,
-                'youtube': False
+                'spotify': False
             }
         }
         
@@ -140,20 +127,12 @@ class RecommendationEngine:
                         existing_ids.add(track_id)
                 result['sources']['spotify'] = len(spotify_tracks) > 0
             
-            # Step 3: Optionally get YouTube videos
-            if self.use_youtube:
-                youtube_data = self._get_youtube_recommendations(seed_artists, seed_tracks, limit)
-                result['seed_videos'] = youtube_data.get('seed_videos', [])
-                result['youtube_videos'] = youtube_data.get('recommendations', [])
-                result['sources']['youtube'] = True
-            
             # Limit to requested amount
             result['tracks'] = result['tracks'][:limit]
             
             print(f"✅ Recommendations: {len(result['tracks'])} tracks "
                   f"(Last.fm: {result['sources']['lastfm']}, "
-                  f"Spotify: {result['sources']['spotify']}, "
-                  f"YouTube: {result['sources']['youtube']})")
+                  f"Spotify: {result['sources']['spotify']})")
             
         except Exception as e:
             print(f"Error in recommendation engine: {str(e)}")
@@ -415,6 +394,12 @@ class RecommendationEngine:
         # Get unique tags (more if expanding)
         max_tags = 5 if expand_search else 3
         unique_tags = list(set(all_tags))[:max_tags]
+
+        # If we couldn't get any tags from Last.fm (e.g., API 403 or empty data),
+        # just return an empty list and let the caller fall back to Spotify-only logic.
+        if not unique_tags:
+            print("Last.fm genre-based recommendations: no tags found, skipping genre step")
+            return []
         
         # Process genres in parallel
         def process_genre(tag):
@@ -484,8 +469,9 @@ class RecommendationEngine:
             
             return genre_recommendations
         
-        # Process all genres in parallel
-        with ThreadPoolExecutor(max_workers=min(len(unique_tags), 3)) as executor:
+        # Process all genres in parallel (ensure max_workers >= 1)
+        max_workers = max(1, min(len(unique_tags), 3))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(process_genre, tag): tag for tag in unique_tags}
             for future in as_completed(futures):
                 genre_recs = future.result()
@@ -555,51 +541,12 @@ class RecommendationEngine:
         
         return recommendations
     
-    def _get_youtube_recommendations(
-        self,
-        seed_artists: List[str],
-        seed_tracks: List[str],
-        limit: int
-    ) -> Dict:
-        """
-        Optional YouTube recommendations.
-        Only used if use_youtube=True.
-        """
-        result = {
-            'seed_videos': [],
-            'recommendations': []
-        }
-        
-        # Get seed videos for selected tracks
-        if seed_tracks:
-            for track_id in seed_tracks[:3]:
-                try:
-                    url = f'https://api.spotify.com/v1/tracks/{track_id}'
-                    headers = {'Authorization': f'Bearer {self.spotify_token}'}
-                    response = requests.get(url, headers=headers, timeout=5)
-                    if response.status_code == 200:
-                        track = response.json()
-                        track_name = track.get('name', '')
-                        artist_name = track.get('artists', [{}])[0].get('name', '') if track.get('artists') else ''
-                        
-                        if track_name and artist_name:
-                            youtube_video = search_track_on_youtube(track_name, artist_name, prefer_official=True)
-                            if youtube_video:
-                                youtube_video['spotify_track_id'] = track_id
-                                result['seed_videos'].append(youtube_video)
-                except:
-                    pass
-        
-        return result
-
-
 # Convenience function for backward compatibility
 def get_hybrid_recommendations(
     spotify_token: str,
     seed_artists: Optional[List[str]] = None,
     seed_tracks: Optional[List[str]] = None,
     limit: int = 20,
-    use_youtube: bool = False,
     exclude_track_ids: Optional[List[str]] = None
 ) -> Dict:
     """
@@ -610,12 +557,11 @@ def get_hybrid_recommendations(
         seed_artists: List of Spotify artist IDs
         seed_tracks: List of Spotify track IDs
         limit: Number of recommendations to return
-        use_youtube: Whether to include YouTube recommendations
     
     Returns:
         dict: Recommendation results
     """
-    engine = RecommendationEngine(spotify_token, use_youtube=use_youtube)
+    engine = RecommendationEngine(spotify_token)
     result = engine.get_recommendations(
         seed_artists, 
         seed_tracks, 
@@ -626,8 +572,6 @@ def get_hybrid_recommendations(
     # Format for backward compatibility
     return {
         'spotify_tracks': result['tracks'],
-        'youtube_videos': result.get('youtube_videos', []),
-        'seed_videos': result.get('seed_videos', []),
         'sources': result.get('sources', {})
     }
 

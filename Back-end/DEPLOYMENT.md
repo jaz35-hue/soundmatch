@@ -3,7 +3,7 @@
 ## Prerequisites
 - GitHub account with your code pushed to a repository
 - Render account (sign up at https://render.com)
-- All API keys ready (Spotify, Last.fm, YouTube)
+- All API keys ready (Spotify, Last.fm)
 
 ## Step-by-Step Deployment
 
@@ -45,7 +45,6 @@ SPOTIFY_CLIENT_ID=your-spotify-client-id
 SPOTIFY_CLIENT_SECRET=your-spotify-client-secret
 SPOTIFY_REDIRECT_URI=https://your-app-name.onrender.com/callback/spotify
 LASTFM_API_KEY=your-lastfm-api-key
-YOUTUBE_API_KEY=your-youtube-api-key
 FLASK_DEBUG=0
 PRODUCTION=true
 PORT=5000

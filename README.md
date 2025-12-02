@@ -48,7 +48,7 @@ A music recommendation web application that helps users discover new music based
 ## Documentation
 
 - **Setup Guide**: `Back-end/SETUP.md` - Complete setup instructions
-- **Architecture**: `Back-end/ARCHITECTURE.md` - System architecture and API details
+- **Deployment Guide**: `Back-end/DEPLOYMENT.md` - Deployment instructions for Render
 
 ## Requirements
 

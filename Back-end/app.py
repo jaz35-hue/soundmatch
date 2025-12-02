@@ -788,31 +788,13 @@ def test_spotify_api():
     # Test fetching top artists
     top_artists = get_user_top_artists(token, limit=5)
     
-    # Test getting recommendations based on top tracks
-    recommendations = []
-    if top_tracks:
-        from recommendation_engine import get_hybrid_recommendations
-        seed_tracks = [track['id'] for track in top_tracks[:3]]
-        try:
-            result = get_hybrid_recommendations(
-                spotify_token=token,
-                seed_tracks=seed_tracks[:5],
-                limit=10,
-                use_youtube=False
-            )
-            recommendations = result.get('spotify_tracks', [])
-        except Exception as e:
-            print(f"Error getting test recommendations: {str(e)}")
-    
     return jsonify({
         'message': 'Spotify API test successful',
         'user': current_user.username,
         'auth_provider': current_user.auth_provider,
         'top_tracks_count': len(top_tracks),
         'top_artists_count': len(top_artists),
-        'recommendations_count': len(recommendations),
-        'sample_top_track': top_tracks[0] if top_tracks else None,
-        'sample_recommendation': recommendations[0] if recommendations else None
+        'sample_top_track': top_tracks[0] if top_tracks else None
     }), 200
 
 
@@ -1667,13 +1649,13 @@ def public_get_recommendations():
         if 'target_tempo' in data:
             rec_params['target_tempo'] = data['target_tempo']
         
-        # Use new recommendation engine (Last.fm primary, Spotify metadata, YouTube optional)
+        # Use new recommendation engine (Last.fm primary, Spotify metadata)
         from recommendation_engine import RecommendationEngine
         
         # Get excluded track IDs for regeneration
         exclude_tracks = data.get('exclude_tracks', [])
         
-        engine = RecommendationEngine(spotify_token=token, use_youtube=False)
+        engine = RecommendationEngine(spotify_token=token)
         hybrid_result = engine.get_recommendations(
             seed_artists=seed_artists[:5] if seed_artists else None,
             seed_tracks=seed_tracks[:5] if seed_tracks else None,
@@ -1686,9 +1668,6 @@ def public_get_recommendations():
         
         # Limit to requested amount
         recommendations = recommendations[:rec_params.get('limit', 20)]
-        
-        # Note: Spotify tracks already have preview URLs from normalize_track
-        # YouTube videos use video embeds instead
         
         # Save recommendations to history if user is logged in
         saved_count = save_recommendations_to_history(recommendations, seed_artists, seed_genres, seed_tracks)

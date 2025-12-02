@@ -60,29 +60,7 @@ LASTFM_API_KEY=your_lastfm_api_key_here
    - Callback URL: `http://localhost:5000`
 5. Copy your API Key
 
-### 3. YouTube API (Optional)
-
-YouTube recommendations are disabled by default. To enable:
-
-```env
-YOUTUBE_API_KEY=your_youtube_api_key_here
-```
-
-**Setup Steps:**
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing
-3. Navigate to **APIs & Services** > **Library**
-4. Search for "YouTube Data API v3" and click **Enable**
-5. Go to **APIs & Services** > **Credentials**
-6. Click **Create Credentials** > **API Key**
-7. Copy the API key
-
-**Note:** If you see 403 errors, check:
-- API key is valid and active
-- YouTube Data API v3 is enabled
-- Quota limits haven't been exceeded
-
-### 4. Flask Secret Key (Optional for Development)
+### 3. Flask Secret Key (Optional for Development)
 
 ```env
 SECRET_KEY=your_secret_key_here
