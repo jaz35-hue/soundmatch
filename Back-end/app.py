@@ -1523,42 +1523,6 @@ def public_search_tracks():
         return jsonify({'error': 'Failed to search tracks'}), 500
 
 
-@app.route('/api/public/artist/<artist_id>', methods=['GET'])
-def public_get_artist(artist_id):
-    """
-    Get artist by ID without requiring login.
-    Uses user's Spotify token if logged in, otherwise app credentials.
-    """
-    try:
-        # Get best available token
-        token, _ = get_spotify_token()
-        if not token:
-            return jsonify({'error': 'Failed to authenticate with Spotify'}), 500
-        
-        url = f'https://api.spotify.com/v1/artists/{artist_id}'
-        headers = {'Authorization': f'Bearer {token}'}
-        
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        artist = response.json()
-        
-        artist_data = {
-            'id': artist['id'],
-            'name': artist['name'],
-            'genres': artist.get('genres', []),
-            'image_url': artist['images'][0]['url'] if artist.get('images') else None,
-            'spotify_url': artist['external_urls']['spotify'],
-            'popularity': artist.get('popularity', 0),
-            'followers': artist.get('followers', {}).get('total', 0)
-        }
-        
-        return jsonify({'artist': artist_data}), 200
-        
-    except Exception as e:
-        print(f"Error getting artist: {str(e)}")
-        return jsonify({'error': 'Failed to get artist'}), 500
-
-
 @app.route('/api/public/genres', methods=['GET'])
 def public_get_genres():
     """Get list of available genre seeds for recommendations."""

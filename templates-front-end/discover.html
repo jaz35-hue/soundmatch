@@ -39,9 +39,6 @@
                     <div class="dropdown-item active" onclick="selectType('Artist')">Artist</div>
                     <div class="dropdown-item" onclick="selectType('Category')">Category</div>
                     <div class="dropdown-item" onclick="selectType('Genre')">Genre</div>
-                    <div class="dropdown-item" onclick="selectType('Playlist')">Playlist</div>
-                    <div class="dropdown-item" onclick="selectType('Song link')">Song link</div>
-                    <div class="dropdown-item" onclick="selectType('Artist link')">Artist link</div>
                 </div>
             </div>
         </div>
@@ -79,6 +76,19 @@
 
         // Load genres on page load
         loadGenres();
+
+        // Safety: remove any legacy dropdown items for Playlist / Song link / Artist link
+        (function removeLegacyTypes() {
+            const menu = document.getElementById('dropdownMenu');
+            if (!menu) return;
+            const legacyLabels = new Set(['Playlist', 'Song link', 'Artist link']);
+            Array.from(menu.querySelectorAll('.dropdown-item')).forEach(item => {
+                const label = item.textContent.trim();
+                if (legacyLabels.has(label)) {
+                    item.remove();
+                }
+            });
+        })();
 
         // Initialize button state
         updateButton();
@@ -126,10 +136,7 @@
                 'Song': 'Search for a song...',
                 'Artist': 'Search for an artist...',
                 'Category': 'Select a category...',
-                'Genre': 'Search or select a genre...',
-                'Playlist': 'Enter playlist name or ID...',
-                'Song link': 'Paste Spotify song URL...',
-                'Artist link': 'Paste Spotify artist URL...'
+                'Genre': 'Search or select a genre...'
             };
             return placeholders[type] || 'Search...';
         }
@@ -149,14 +156,6 @@
                 return;
             }
             
-            if (currentType === 'Song link' || currentType === 'Artist link') {
-                // Handle URL parsing
-                if (query.length > 10) {
-                    parseSpotifyLink(query);
-                }
-                return;
-            }
-            
             if (query.length < 2) {
                 document.getElementById('searchResults').innerHTML = '<div class="loading">Type at least 2 characters...</div>';
                 return;
@@ -167,8 +166,6 @@
                     searchTracks(query);
                 } else if (currentType === 'Artist') {
                     searchArtists(query);
-                } else if (currentType === 'Playlist') {
-                    searchPlaylists(query);
                 }
             }, 500);
         });
@@ -385,84 +382,6 @@
             }
         }
 
-        async function searchPlaylists(query) {
-            // Playlist search would require additional API endpoint
-            // For now, show a message
-            document.getElementById('searchResults').innerHTML = 
-                '<div class="loading">Playlist search coming soon. Use playlist ID or link.</div>';
-        }
-
-        function parseSpotifyLink(url) {
-            // Extract ID from Spotify URL
-            const patterns = {
-                'Song link': /spotify\.com\/track\/([a-zA-Z0-9]+)/,
-                'Artist link': /spotify\.com\/artist\/([a-zA-Z0-9]+)/
-            };
-            
-            const pattern = patterns[currentType];
-            if (pattern) {
-                const match = url.match(pattern);
-                if (match && match[1]) {
-                    const id = match[1];
-                    // Add the ID as a selected item
-                    if (currentType === 'Song link') {
-                        // Fetch track info
-                        fetchTrackById(id);
-                    } else if (currentType === 'Artist link') {
-                        // Fetch artist info
-                        fetchArtistById(id);
-                    }
-                } else {
-                    document.getElementById('searchResults').innerHTML = 
-                        '<div class="error">Invalid Spotify URL. Please paste a valid link.</div>';
-                }
-            }
-        }
-
-        async function fetchTrackById(trackId) {
-            try {
-                const response = await fetch(`/api/public/track/${trackId}`);
-                const data = await response.json();
-                
-                if (response.ok && data.track) {
-                    const track = data.track;
-                    toggleItem('track', track.id, track.name, track);
-                    document.getElementById('searchInput').value = '';
-                    document.getElementById('searchResults').innerHTML = 
-                        `<div class="loading">✓ Added: ${track.name}</div>`;
-                } else {
-                    document.getElementById('searchResults').innerHTML = 
-                        '<div class="error">Track not found</div>';
-                }
-            } catch (error) {
-                console.error('Error fetching track:', error);
-                document.getElementById('searchResults').innerHTML = 
-                    '<div class="error">Failed to fetch track</div>';
-            }
-        }
-
-        async function fetchArtistById(artistId) {
-            try {
-                const response = await fetch(`/api/public/artist/${artistId}`);
-                const data = await response.json();
-                
-                if (response.ok && data.artist) {
-                    const artist = data.artist;
-                    toggleItem('artist', artist.id, artist.name, artist);
-                    document.getElementById('searchInput').value = '';
-                    document.getElementById('searchResults').innerHTML = 
-                        `<div class="loading">✓ Added: ${artist.name}</div>`;
-                } else {
-                    document.getElementById('searchResults').innerHTML = 
-                        '<div class="error">Artist not found</div>';
-                }
-            } catch (error) {
-                console.error('Error fetching artist:', error);
-                document.getElementById('searchResults').innerHTML = 
-                    '<div class="error">Failed to fetch artist</div>';
-            }
-        }
-
         function toggleItem(type, id, name, fullData = null) {
             const index = selectedItems.findIndex(item => item.id === id && item.type === type);
             
@@ -552,7 +471,7 @@
             for (const item of selectedItems) {
                 if (item.type === 'artist') {
                     seeds.artists.push(item.id);
-                } else if (item.type === 'track' || item.type === 'song') {
+                } else if (item.type === 'track') {
                     seeds.tracks.push(item.id);
                 } else if (item.type === 'genre') {
                     seeds.genres.push(item.id);
