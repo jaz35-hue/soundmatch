@@ -121,7 +121,5 @@ python -c "import os; from dotenv import load_dotenv; load_dotenv(); print('SPOT
 - Ensure all dependencies are installed: `pip install -r requirements.txt`
 - Check Python version (3.8+ required)
 
-## Architecture
 
-See `ARCHITECTURE.md` for detailed system architecture and API responsibilities.
 

@@ -1,8 +1,8 @@
-# Deploying SoundMatch to Render
+# Deploying SoundMatch to Railway
 
 ## Prerequisites
 - GitHub account with your code pushed to a repository
-- Render account (sign up at https://render.com)
+- Railway account (sign up at https://railway.app)
 - All API keys ready (Spotify, Last.fm)
 
 ## Step-by-Step Deployment
@@ -15,35 +15,28 @@ git commit -m "Prepare for deployment"
 git push origin main
 ```
 
-### 2. Create Render Account
-1. Go to https://render.com
-2. Sign up/login with GitHub
-3. Authorize Render to access your GitHub repositories
+### 2. Create Railway Project
+1. Go to https://railway.app
+2. Click **"New Project"**
+3. Select **"Deploy from GitHub repo"**
+4. Select your `soundmatch` repository
 
-### 3. Create New Web Service
-1. Click **"New +"** → **"Web Service"**
-2. Connect your GitHub repository
-3. Select the repository containing SoundMatch
+### 3. Configure Service Settings
 
-### 4. Configure Service Settings
-
-**Basic Settings:**
-- **Name**: `soundmatch` (or your preferred name)
-- **Region**: Choose closest to your users
-- **Branch**: `main` (or your default branch)
+**Build & Start Settings:**
+Railway usually detects Python automatically, but verify:
 - **Root Directory**: `Back-end`
-- **Runtime**: `Python 3`
 - **Build Command**: `pip install -r requirements.txt`
 - **Start Command**: `python app.py`
 
 **Environment Variables:**
-Add all required environment variables:
+Go to the **Variables** tab and add:
 
 ```
 SECRET_KEY=your-secret-key-here
 SPOTIFY_CLIENT_ID=your-spotify-client-id
 SPOTIFY_CLIENT_SECRET=your-spotify-client-secret
-SPOTIFY_REDIRECT_URI=https://your-app-name.onrender.com/callback/spotify
+SPOTIFY_REDIRECT_URI=https://your-app-url.up.railway.app/callback/spotify
 LASTFM_API_KEY=your-lastfm-api-key
 FLASK_DEBUG=0
 PRODUCTION=true
@@ -52,31 +45,22 @@ PORT=5000
 
 **Important Notes:**
 - Generate a secure `SECRET_KEY`: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
-- Update `SPOTIFY_REDIRECT_URI` with your Render app URL after deployment
+- Update `SPOTIFY_REDIRECT_URI` with your Railway app URL after it's generated (Settings -> Domains)
 - Set `FLASK_DEBUG=0` for production
-- Set `PRODUCTION=true` to enforce SECRET_KEY requirement
 
-### 5. Create PostgreSQL Database (Optional but Recommended)
-1. Click **"New +"** → **"PostgreSQL"**
-2. Name it: `soundmatch-db`
-3. Copy the **Internal Database URL**
-4. Add to environment variables as `DATABASE_URL`
+### 4. Create Database (Optional but Recommended)
+1. In your project view, click **"New"** -> **"Database"** -> **"PostgreSQL"**
+2. Once created, Railway automatically adds `DATABASE_URL` to your service variables
+3. SoundMatch will automatically detect `DATABASE_URL` and use PostgreSQL instead of SQLite
 
-**Note:** If using PostgreSQL, update `app.py` to use `DATABASE_URL` instead of SQLite.
-
-### 6. Deploy
-1. Click **"Create Web Service"**
-2. Wait for build to complete (5-10 minutes)
-3. Your app will be available at `https://your-app-name.onrender.com`
-
-### 7. Update Spotify Redirect URI
+### 5. Update Spotify Redirect URI
 1. Go to Spotify Developer Dashboard
 2. Edit your app settings
-3. Add redirect URI: `https://your-app-name.onrender.com/callback/spotify`
+3. Add redirect URI: `https://your-app-url.up.railway.app/callback/spotify`
 4. Save changes
 
-### 8. Verify Deployment
-1. Visit your Render app URL
+### 6. Verify Deployment
+1. Visit your Railway app URL
 2. Test registration/login
 3. Test Spotify OAuth flow
 4. Test recommendations feature
@@ -84,38 +68,17 @@ PORT=5000
 ## Troubleshooting
 
 ### Build Fails
-- Check build logs in Render dashboard
+- Check build logs in Railway dashboard
 - Verify `requirements.txt` includes all dependencies
-- Ensure Python version is compatible
+- Ensure `Back-end` is set as the root directory
 
 ### App Crashes
-- Check logs in Render dashboard
+- Check "Deploy Logs" in Railway
 - Verify all environment variables are set
-- Ensure `SECRET_KEY` is set in production
+- Ensure `SECRET_KEY` is set
 
 ### Database Issues
-- SQLite files are ephemeral on Render (reset on restart)
-- Use PostgreSQL for persistent data
-- Check database connection string
+- If using SQLite (no PostgreSQL service), data will be lost on redeploy
+- Use the PostgreSQL service for persistent data
 
-### API Errors
-- Verify all API keys are correct
-- Check API rate limits
-- Review error logs in Render dashboard
-
-## Post-Deployment Checklist
-- [ ] All environment variables configured
-- [ ] Spotify redirect URI updated
-- [ ] App accessible via HTTPS
-- [ ] Database initialized (if using PostgreSQL)
-- [ ] Test user registration
-- [ ] Test Spotify OAuth
-- [ ] Test recommendations feature
-- [ ] Monitor logs for errors
-
-## Free Tier Limitations
-- Services spin down after 15 minutes of inactivity
-- First request after spin-down takes ~30 seconds
-- 750 hours/month free tier limit
-- Consider upgrading for production use
 
