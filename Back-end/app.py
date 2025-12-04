@@ -28,7 +28,6 @@ from wtforms.validators import InputRequired, Length, Regexp, ValidationError
 # Local imports
 from spotify_api import (
     add_track_to_spotify_library,
-    get_available_genre_seeds,
     get_user_recently_played,
     get_user_top_artists,
     get_user_top_tracks,
@@ -1641,6 +1640,7 @@ def public_get_recommendations():
         hybrid_result = engine.get_recommendations(
             seed_artists=seed_artists[:5] if seed_artists else None,
             seed_tracks=seed_tracks[:5] if seed_tracks else None,
+            seed_genres=seed_genres[:5] if seed_genres else None,
             limit=rec_params.get('limit', 20),
             exclude_track_ids=exclude_tracks
         )
@@ -2129,54 +2129,6 @@ def save_recommendations_to_history(recommendations, seed_artists=None, seed_gen
         traceback.print_exc()
     
     return saved_count
-
-
-def enrich_tracks_with_previews(access_token, tracks, max_enrich=20):
-    """
-    Enrich tracks with preview URLs if they're missing.
-    Only enriches a limited number to avoid too many API calls.
-    
-    Args:
-        access_token: Spotify access token
-        tracks: List of track dictionaries
-        max_enrich: Maximum number of tracks to enrich (default 20, increased for better coverage)
-    
-    Returns:
-        list: Tracks with preview URLs added where available
-    """
-    if not tracks or not access_token:
-        return tracks
-    
-    enriched_count = 0
-    for track in tracks:
-        # Skip if already has preview URL or we've enriched enough
-        if track.get('preview_url') or enriched_count >= max_enrich:
-            continue
-        
-        track_id = track.get('id')
-        if not track_id:
-            continue
-        
-        try:
-            # Fetch full track details to get preview URL
-            url = f'https://api.spotify.com/v1/tracks/{track_id}'
-            headers = {'Authorization': f'Bearer {access_token}'}
-            response = requests.get(url, headers=headers, timeout=5)
-            
-            if response.status_code == 200:
-                track_data = response.json()
-                preview_url = track_data.get('preview_url')
-                if preview_url:
-                    track['preview_url'] = preview_url
-                    enriched_count += 1
-        except Exception as e:
-            # Silently fail - preview URL enrichment is optional
-            continue
-    
-    if enriched_count > 0:
-        print(f"Enriched {enriched_count} tracks with preview URLs")
-    
-    return tracks
 
 
 def get_app_access_token():

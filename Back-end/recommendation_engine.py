@@ -8,14 +8,14 @@ Orchestrates recommendations using multiple APIs with clear responsibilities:
 from typing import List, Dict, Optional
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
 
 # Import API modules
 from spotify_api import (
     get_artist_info,
     normalize_track,
     search_tracks,
-    get_artist_genres
+    get_artist_genres,
+    get_recommendations as get_spotify_recommendations
 )
 from lastfm_api import (
     get_similar_artists,
@@ -42,6 +42,7 @@ class RecommendationEngine:
         self,
         seed_artists: Optional[List[str]] = None,
         seed_tracks: Optional[List[str]] = None,
+        seed_genres: Optional[List[str]] = None,
         limit: int = 20,
         exclude_track_ids: Optional[List[str]] = None,
         expand_search: bool = False
@@ -62,6 +63,7 @@ class RecommendationEngine:
         """
         seed_artists = seed_artists or []
         seed_tracks = seed_tracks or []
+        seed_genres = seed_genres or []
         exclude_track_ids = exclude_track_ids or []
         exclude_set = set(exclude_track_ids)
         
@@ -82,48 +84,83 @@ class RecommendationEngine:
         }
         
         try:
-            # Step 1: Get recommendations from Last.fm (primary engine)
-            lastfm_tracks = self._get_lastfm_recommendations(
-                seed_artists, 
-                seed_tracks, 
-                search_limit,
-                expand_search=expand_search
-            )
-            # Filter out excluded tracks
-            lastfm_tracks = [t for t in lastfm_tracks if t.get('id') not in exclude_set]
-            result['tracks'] = lastfm_tracks
-            result['sources']['lastfm'] = len(lastfm_tracks) > 0
+            # Determine recommendation strategy based on available seeds
+            has_artists = len(seed_artists) > 0
+            has_tracks = len(seed_tracks) > 0
+            has_genres = len(seed_genres) > 0
             
-            # Step 2: If not enough, use genre-based recommendations (more diverse)
-            if len(result['tracks']) < limit:
-                genre_tracks = self._get_genre_based_recommendations(
-                    seed_artists, 
-                    search_limit - len(result['tracks']),
+            # Strategy 1: Genre/Category-only recommendations (use Last.fm tags)
+            if has_genres and not has_artists and not has_tracks:
+                print(f"Using genre-only recommendations for: {seed_genres}")
+                genre_recs = self._get_genre_only_recommendations(
+                    seed_genres,
+                    search_limit,
                     expand_search=expand_search
                 )
-                # Filter excluded and merge
-                existing_ids = {t.get('id') for t in result['tracks']}
-                for track in genre_tracks:
-                    track_id = track.get('id')
-                    if track_id and track_id not in existing_ids and track_id not in exclude_set:
-                        result['tracks'].append(track)
-                        existing_ids.add(track_id)
+                # Filter excluded tracks
+                genre_recs = [t for t in genre_recs if t.get('id') not in exclude_set]
+                result['tracks'] = genre_recs[:limit]
+                result['sources']['lastfm'] = len(genre_recs) > 0
+                print(f"✅ Genre-based recommendations: {len(result['tracks'])} tracks")
             
-            # Step 3: If still not enough, use Spotify search as fallback
-            if len(result['tracks']) < limit:
-                spotify_tracks = self._get_spotify_fallback_recommendations(
+            # Strategy 2: Artist-based recommendations (Last.fm primary)
+            elif has_artists:
+                # Step 1: Get recommendations from Last.fm (primary engine)
+                lastfm_tracks = self._get_lastfm_recommendations(
                     seed_artists, 
-                    search_limit - len(result['tracks']),
+                    seed_tracks, 
+                    search_limit,
                     expand_search=expand_search
                 )
-                # Merge without duplicates
-                existing_ids = {t.get('id') for t in result['tracks']}
-                for track in spotify_tracks:
-                    track_id = track.get('id')
-                    if track_id and track_id not in existing_ids and track_id not in exclude_set:
-                        result['tracks'].append(track)
-                        existing_ids.add(track_id)
-                result['sources']['spotify'] = len(spotify_tracks) > 0
+                # Filter out excluded tracks
+                lastfm_tracks = [t for t in lastfm_tracks if t.get('id') not in exclude_set]
+                result['tracks'] = lastfm_tracks
+                result['sources']['lastfm'] = len(lastfm_tracks) > 0
+                
+                # Step 2: If not enough and genres provided, add genre-based recommendations
+                if len(result['tracks']) < limit and has_genres:
+                    genre_tracks = get_spotify_recommendations(
+                        self.spotify_token,
+                        seed_artists=seed_artists[:5] if seed_artists else None,
+                        seed_genres=seed_genres[:5],
+                        limit=search_limit - len(result['tracks'])
+                    )
+                    # Filter excluded and merge
+                    existing_ids = {t.get('id') for t in result['tracks']}
+                    for track in genre_tracks:
+                        track_id = track.get('id')
+                        if track_id and track_id not in existing_ids and track_id not in exclude_set:
+                            result['tracks'].append(track)
+                            existing_ids.add(track_id)
+                
+                # Step 3: If still not enough, use Spotify search as fallback
+                if len(result['tracks']) < limit:
+                    spotify_tracks = self._get_spotify_fallback_recommendations(
+                        seed_artists, 
+                        search_limit - len(result['tracks']),
+                        expand_search=expand_search
+                    )
+                    # Merge without duplicates
+                    existing_ids = {t.get('id') for t in result['tracks']}
+                    for track in spotify_tracks:
+                        track_id = track.get('id')
+                        if track_id and track_id not in existing_ids and track_id not in exclude_set:
+                            result['tracks'].append(track)
+                            existing_ids.add(track_id)
+                    result['sources']['spotify'] = len(spotify_tracks) > 0
+            
+            # Strategy 3: Track-only recommendations (Last.fm similar tracks)
+            elif has_tracks:
+                lastfm_tracks = self._get_lastfm_recommendations(
+                    seed_artists, 
+                    seed_tracks, 
+                    search_limit,
+                    expand_search=expand_search
+                )
+                # Filter out excluded tracks
+                lastfm_tracks = [t for t in lastfm_tracks if t.get('id') not in exclude_set]
+                result['tracks'] = lastfm_tracks
+                result['sources']['lastfm'] = len(lastfm_tracks) > 0
             
             # Limit to requested amount
             result['tracks'] = result['tracks'][:limit]
@@ -269,20 +306,22 @@ class RecommendationEngine:
             
             return artist_recommendations
         
-        # Process all artists in parallel
-        with ThreadPoolExecutor(max_workers=min(len(artist_names), 3)) as executor:
-            futures = {executor.submit(process_artist, name): name for name in artist_names}
-            for future in as_completed(futures):
-                artist_recs = future.result()
-                for track in artist_recs:
-                    track_id = track.get('id')
-                    if track_id and track_id not in seen_track_ids:
-                        seen_track_ids.add(track_id)
-                        recommendations.append(track)
-                        if len(recommendations) >= limit:
-                            break
-                if len(recommendations) >= limit:
-                    break
+        # Process all artists in parallel (only if we have artists)
+        if len(artist_names) > 0:
+            max_workers = max(1, min(len(artist_names), 3))  # Ensure at least 1 worker
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(process_artist, name): name for name in artist_names}
+                for future in as_completed(futures):
+                    artist_recs = future.result()
+                    for track in artist_recs:
+                        track_id = track.get('id')
+                        if track_id and track_id not in seen_track_ids:
+                            seen_track_ids.add(track_id)
+                            recommendations.append(track)
+                            if len(recommendations) >= limit:
+                                break
+                    if len(recommendations) >= limit:
+                        break
         
         print(f"Last.fm found {len(recommendations)} recommendations from similar artists")
         
@@ -485,6 +524,140 @@ class RecommendationEngine:
         
         return recommendations
     
+    def _get_genre_only_recommendations(
+        self,
+        seed_genres: List[str],
+        limit: int,
+        expand_search: bool = False
+    ) -> List[Dict]:
+        """
+        Get recommendations based solely on genres/categories using Spotify search.
+        This method works when only genres are selected (no artists or tracks).
+        Searches Spotify for tracks matching ANY of the selected genres.
+        """
+        recommendations = []
+        seen_track_ids = set()
+        
+        # Normalize genre names (handle categories that might be formatted differently)
+        normalized_genres = []
+        for genre in seed_genres[:5]:  # Max 5 genres
+            # Convert category IDs to genre names if needed
+            genre_lower = genre.lower().strip()
+            # Map common category IDs to genre names
+            category_map = {
+                'pop': 'pop',
+                'rock': 'rock',
+                'hip-hop': 'hip hop',
+                'hip hop': 'hip hop',
+                'electronic': 'electronic',
+                'jazz': 'jazz',
+                'classical': 'classical',
+                'country': 'country',
+                'r-n-b': 'r&b',
+                'r&b': 'r&b',
+                'metal': 'metal',
+                'indie': 'indie',
+                'folk': 'folk',
+                'reggae': 'reggae'
+            }
+            # Use mapped name if it's a category, otherwise use as-is
+            normalized_genre = category_map.get(genre_lower, genre_lower)
+            normalized_genres.append(normalized_genre)
+        
+        print(f"Searching Spotify for genres: {normalized_genres}")
+        
+        # Search Spotify for each genre and combine results
+        def search_genre(genre_name):
+            """Search Spotify for tracks in a specific genre"""
+            genre_tracks = []
+            try:
+                # Search for tracks using genre as keyword
+                # Try multiple search strategies to get diverse results
+                search_queries = [
+                    genre_name,  # Simple genre name
+                    f"genre:{genre_name}",  # Genre filter (if supported)
+                    f"tag:{genre_name}",  # Tag filter (if supported)
+                ]
+                
+                # Use the first query that works, or combine results
+                tracks_per_genre = (limit // len(normalized_genres)) + 10 if normalized_genres else limit
+                if expand_search:
+                    tracks_per_genre = tracks_per_genre * 2
+                
+                # Search with genre name as keyword
+                search_results = search_tracks(
+                    self.spotify_token,
+                    genre_name,
+                    limit=min(tracks_per_genre, 50)
+                )
+                
+                # Add initial search results
+                for track in search_results:
+                    track_id = track.get('id')
+                    if track_id:
+                        genre_tracks.append(track)
+                
+                # Also try searching for popular tracks with genre in the query
+                if len(genre_tracks) < tracks_per_genre:
+                    # Try searching for "popular [genre]" or "[genre] music"
+                    additional_queries = [
+                        f"{genre_name} music",
+                        f"popular {genre_name}",
+                        f"best {genre_name}"
+                    ]
+                    existing_ids = {t.get('id') for t in genre_tracks}
+                    for query in additional_queries:
+                        if len(genre_tracks) >= tracks_per_genre:
+                            break
+                        try:
+                            more_results = search_tracks(
+                                self.spotify_token,
+                                query,
+                                limit=min(20, tracks_per_genre - len(genre_tracks))
+                            )
+                            # Add unique tracks
+                            for track in more_results:
+                                track_id = track.get('id')
+                                if track_id and track_id not in existing_ids:
+                                    genre_tracks.append(track)
+                                    existing_ids.add(track_id)
+                        except Exception as e:
+                            print(f"Error in additional search for {query}: {str(e)}")
+                            continue
+                
+                print(f"Found {len(genre_tracks)} tracks for genre '{genre_name}'")
+                
+            except Exception as e:
+                print(f"Error searching for genre {genre_name}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+            
+            return genre_tracks
+        
+        # Search all genres in parallel
+        if len(normalized_genres) > 0:
+            max_workers = max(1, min(len(normalized_genres), 5))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {executor.submit(search_genre, genre): genre for genre in normalized_genres}
+                for future in as_completed(futures):
+                    genre_tracks = future.result()
+                    for track in genre_tracks:
+                        track_id = track.get('id')
+                        if track_id and track_id not in seen_track_ids:
+                            seen_track_ids.add(track_id)
+                            recommendations.append(track)
+                            if len(recommendations) >= limit:
+                                break
+                    if len(recommendations) >= limit:
+                        break
+        
+        # Shuffle to mix genres (optional - can be removed if you want genre grouping)
+        import random
+        random.shuffle(recommendations)
+        
+        print(f"Found {len(recommendations)} total tracks from genre-only recommendations")
+        return recommendations[:limit]
+    
     def _get_spotify_fallback_recommendations(
         self,
         seed_artists: List[str],
@@ -538,38 +711,4 @@ class RecommendationEngine:
                 print(f"Error in Spotify fallback for genre {genre}: {str(e)}")
         
         return recommendations
-    
-# Convenience function for backward compatibility
-def get_hybrid_recommendations(
-    spotify_token: str,
-    seed_artists: Optional[List[str]] = None,
-    seed_tracks: Optional[List[str]] = None,
-    limit: int = 20,
-    exclude_track_ids: Optional[List[str]] = None
-) -> Dict:
-    """
-    Get hybrid recommendations (backward compatibility wrapper).
-    
-    Args:
-        spotify_token: Valid Spotify access token
-        seed_artists: List of Spotify artist IDs
-        seed_tracks: List of Spotify track IDs
-        limit: Number of recommendations to return
-    
-    Returns:
-        dict: Recommendation results
-    """
-    engine = RecommendationEngine(spotify_token)
-    result = engine.get_recommendations(
-        seed_artists, 
-        seed_tracks, 
-        limit,
-        exclude_track_ids=exclude_track_ids
-    )
-    
-    # Format for backward compatibility
-    return {
-        'spotify_tracks': result['tracks'],
-        'sources': result.get('sources', {})
-    }
 

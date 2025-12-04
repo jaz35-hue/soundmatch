@@ -192,36 +192,6 @@ def get_artist_tags(artist_name: str, limit: int = 10) -> List[Dict]:
     ]
 
 
-def get_track_tags(track_name: str, artist_name: str, limit: int = 10) -> List[Dict]:
-    """
-    Get tags (genres) for a track from Last.fm.
-    
-    Args:
-        track_name: Name of the track
-        artist_name: Name of the artist
-        limit: Maximum number of tags to return
-    
-    Returns:
-        list: List of tag dictionaries
-    """
-    if not LASTFM_API_KEY:
-        return []
-    
-    data = _make_lastfm_request('track.getTopTags', {'track': track_name, 'artist': artist_name}, limit)
-    if not data:
-        return []
-    
-    tags = _normalize_list(data.get('toptags', {}), 'tag')
-    return [
-        {
-            'name': tag.get('name', ''),
-            'count': int(tag.get('count', 0)) if tag.get('count') else 0,
-            'url': tag.get('url', '')
-        }
-        for tag in tags[:limit]
-    ]
-
-
 def search_artists(query: str, limit: int = 10) -> List[Dict]:
     """
     Search for artists on Last.fm.
