@@ -3,8 +3,6 @@ Main Recommendation Engine
 Orchestrates recommendations using multiple APIs with clear responsibilities:
 - Last.fm: Primary recommendation engine (similar artists, tracks, genres)
 - Spotify: Metadata provider (track details, search, artist info)
-
-YouTube support has been removed – recommendations no longer use the YouTube API.
 """
 
 from typing import List, Dict, Optional
