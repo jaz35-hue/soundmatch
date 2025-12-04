@@ -14,7 +14,7 @@ A music recommendation web application that helps users discover new music based
 
 - **Backend**: Python, Flask, SQLAlchemy
 - **Frontend**: HTML, CSS, JavaScript
-- **APIs**: Spotify Web API, Last.fm API, YouTube Data API (optional)
+- **APIs**: Spotify Web API, Last.fm API
 - **Database**: SQLite
 
 ## Quick Start
@@ -55,6 +55,5 @@ A music recommendation web application that helps users discover new music based
 - Python 3.8+
 - Spotify API credentials
 - Last.fm API key
-- YouTube API key (optional)
 
 See `Back-end/SETUP.md` for detailed setup instructions.

@@ -102,13 +102,6 @@
                             </svg>
                         </a>
                         {% endif %}
-                        {% if track.preview_url %}
-                        <button class="play-btn" onclick="playPreview('{{ track.preview_url }}', this)" title="Play Preview">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M8 5v14l11-7z"/>
-                            </svg>
-                        </button>
-                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
@@ -199,27 +192,6 @@
                     dropdown.classList.remove('show');
                 }
             }
-        }
-        
-        let currentAudio = null;
-        function playPreview(url, button) {
-            if (currentAudio && !currentAudio.paused) {
-                currentAudio.pause();
-                currentAudio = null;
-                document.querySelectorAll('.play-btn').forEach(btn => {
-                    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-                });
-                return;
-            }
-            
-            currentAudio = new Audio(url);
-            currentAudio.play();
-            button.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>';
-            
-            currentAudio.onended = function() {
-                button.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-                currentAudio = null;
-            };
         }
     </script>
 </body>
