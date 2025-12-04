@@ -15,7 +15,8 @@ from spotify_api import (
     normalize_track,
     search_tracks,
     get_artist_genres,
-    get_recommendations as get_spotify_recommendations
+    get_recommendations as get_spotify_recommendations,
+    get_track
 )
 from lastfm_api import (
     get_similar_artists,
@@ -273,11 +274,8 @@ class RecommendationEngine:
                                     # If track doesn't have preview_url, try to fetch it
                                     if not track.get('preview_url') and track_id:
                                         try:
-                                            url = f'https://api.spotify.com/v1/tracks/{track_id}'
-                                            headers = {'Authorization': f'Bearer {self.spotify_token}'}
-                                            response = requests.get(url, headers=headers, timeout=3)
-                                            if response.status_code == 200:
-                                                track_data = response.json()
+                                            track_data = get_track(self.spotify_token, track_id)
+                                            if track_data:
                                                 preview_url = track_data.get('preview_url')
                                                 if preview_url:
                                                     track['preview_url'] = preview_url
@@ -335,14 +333,19 @@ class RecommendationEngine:
                 
                 try:
                     # Get track info from Spotify
-                    url = f'https://api.spotify.com/v1/tracks/{track_id}'
-                    headers = {'Authorization': f'Bearer {self.spotify_token}'}
-                    response = requests.get(url, headers=headers, timeout=5)
+                    track_data = get_track(self.spotify_token, track_id)
                     
-                    if response.status_code == 200:
-                        track_data = response.json()
+                    if track_data:
                         track_name = track_data.get('name', '')
-                        artist_name = track_data.get('artists', [{}])[0].get('name', '') if track_data.get('artists') else ''
+                        # Handle normalized track structure where artists is a list of dicts or strings
+                        artists = track_data.get('artists', [])
+                        if artists and isinstance(artists, list):
+                            if isinstance(artists[0], dict):
+                                artist_name = artists[0].get('name', '')
+                            else:
+                                artist_name = str(artists[0])
+                        else:
+                            artist_name = track_data.get('artist', '')
                         
                         if track_name and artist_name:
                             # Get similar tracks from Last.fm

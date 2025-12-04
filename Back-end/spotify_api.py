@@ -98,20 +98,87 @@ def get_valid_spotify_token(user):
 
 
 # =============================================================================
+# Helper Functions
+# =============================================================================
+
+def _make_spotify_request(url, headers, params=None, method='GET', data=None, json=None, max_retries=3, silent=False):
+    """
+    Make a Spotify API request with retry logic and rate limit handling.
+    
+    Args:
+        url: API endpoint URL
+        headers: Request headers
+        params: Query parameters
+        method: HTTP method (GET, POST, PUT, etc.)
+        data: Form data
+        json: JSON data
+        max_retries: Maximum number of retry attempts
+        silent: If True, suppress non-critical error messages
+    
+    Returns:
+        requests.Response or None if all retries fail
+    """
+    for attempt in range(max_retries):
+        try:
+            if method.upper() == 'GET':
+                response = requests.get(url, headers=headers, params=params, timeout=10)
+            elif method.upper() == 'POST':
+                response = requests.post(url, headers=headers, params=params, data=data, json=json, timeout=10)
+            elif method.upper() == 'PUT':
+                response = requests.put(url, headers=headers, params=params, data=data, json=json, timeout=10)
+            else:
+                response = requests.request(method, url, headers=headers, params=params, data=data, json=json, timeout=10)
+            
+            # Handle rate limiting (429 Too Many Requests)
+            if response.status_code == 429:
+                retry_after = int(response.headers.get('Retry-After', 5))
+                # Cap wait time to avoid hanging too long (e.g. max 10 seconds)
+                # If Spotify asks for more, we might just fail this request
+                wait_time = min(retry_after, 10) 
+                
+                if not silent:
+                    print(f"Rate limited (429). Waiting {wait_time}s... (Spotify asked for {retry_after}s)")
+                
+                time.sleep(wait_time)
+                
+                # If the wait time was capped and less than requested, 
+                # we might still fail the next request, but we'll try once more
+                continue
+            
+            # Return response for caller to handle (401, 403, 200, etc.)
+            return response
+            
+        except requests.Timeout:
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # Exponential backoff
+                if not silent:
+                    print(f"Request timeout. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                if not silent:
+                    print(f"Request timeout after {max_retries} attempts")
+                return None
+        except requests.RequestException as e:
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # Exponential backoff
+                if not silent:
+                    print(f"Request error: {str(e)}. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                if not silent:
+                    print(f"Request failed after {max_retries} attempts")
+                return None
+    
+    return None
+
+
+# =============================================================================
 # User Data Retrieval
 # =============================================================================
 
 def get_user_top_tracks(access_token, time_range='medium_term', limit=20):
     """
     Fetch user's top tracks from Spotify.
-    
-    Args:
-        access_token: Valid Spotify access token
-        time_range: 'short_term' (4 weeks), 'medium_term' (6 months), 'long_term' (years)
-        limit: Number of tracks to return (max 50)
-    
-    Returns:
-        list: List of track dictionaries, or empty list on error
     """
     try:
         url = 'https://api.spotify.com/v1/me/top/tracks'
@@ -121,7 +188,11 @@ def get_user_top_tracks(access_token, time_range='medium_term', limit=20):
             'limit': min(limit, 50)
         }
         
-        response = requests.get(url, headers=headers, params=params)
+        response = _make_spotify_request(url, headers, params=params)
+        
+        if not response:
+            return []
+            
         response.raise_for_status()
         data = response.json()
         
@@ -133,7 +204,7 @@ def get_user_top_tracks(access_token, time_range='medium_term', limit=20):
         
         return tracks
         
-    except requests.RequestException as e:
+    except Exception as e:
         print(f"Error fetching top tracks: {str(e)}")
         return []
 
@@ -141,14 +212,6 @@ def get_user_top_tracks(access_token, time_range='medium_term', limit=20):
 def get_user_top_artists(access_token, time_range='medium_term', limit=20):
     """
     Fetch user's top artists from Spotify.
-    
-    Args:
-        access_token: Valid Spotify access token
-        time_range: 'short_term', 'medium_term', 'long_term'
-        limit: Number of artists to return (max 50)
-    
-    Returns:
-        list: List of artist dictionaries, or empty list on error
     """
     try:
         url = 'https://api.spotify.com/v1/me/top/artists'
@@ -158,7 +221,11 @@ def get_user_top_artists(access_token, time_range='medium_term', limit=20):
             'limit': min(limit, 50)
         }
         
-        response = requests.get(url, headers=headers, params=params)
+        response = _make_spotify_request(url, headers, params=params)
+        
+        if not response:
+            return []
+            
         response.raise_for_status()
         data = response.json()
         
@@ -175,7 +242,7 @@ def get_user_top_artists(access_token, time_range='medium_term', limit=20):
         
         return artists
         
-    except requests.RequestException as e:
+    except Exception as e:
         print(f"Error fetching top artists: {str(e)}")
         return []
 
@@ -183,20 +250,17 @@ def get_user_top_artists(access_token, time_range='medium_term', limit=20):
 def get_user_recently_played(access_token, limit=50):
     """
     Fetch user's recently played tracks.
-    
-    Args:
-        access_token: Valid Spotify access token
-        limit: Number of tracks to return (max 50)
-    
-    Returns:
-        list: List of recently played track dictionaries
     """
     try:
         url = 'https://api.spotify.com/v1/me/player/recently-played'
         headers = {'Authorization': f'Bearer {access_token}'}
         params = {'limit': min(limit, 50)}
         
-        response = requests.get(url, headers=headers, params=params)
+        response = _make_spotify_request(url, headers, params=params)
+        
+        if not response:
+            return []
+            
         response.raise_for_status()
         data = response.json()
         
@@ -211,7 +275,7 @@ def get_user_recently_played(access_token, limit=50):
         
         return tracks
         
-    except requests.RequestException as e:
+    except Exception as e:
         print(f"Error fetching recently played: {str(e)}")
         return []
 
@@ -223,23 +287,6 @@ def get_user_recently_played(access_token, limit=50):
 def get_recommendations(access_token, seed_tracks=None, seed_artists=None, seed_genres=None, **params):
     """
     Get track recommendations from Spotify.
-    
-    Args:
-        access_token: Valid Spotify access token
-        seed_tracks: List of track IDs (up to 5)
-        seed_artists: List of artist IDs (up to 5)
-        seed_genres: List of genre names (up to 5)
-        **params: Additional parameters like:
-            - target_energy: 0.0 to 1.0
-            - target_valence: 0.0 to 1.0
-            - target_tempo: BPM
-            - min_popularity, max_popularity: 0 to 100
-            - limit: Number of recommendations (default 20, max 100)
-    
-    Returns:
-        list: List of recommended track dictionaries
-    
-    Note: Total seeds (tracks + artists + genres) must be between 1 and 5
     """
     try:
         url = 'https://api.spotify.com/v1/recommendations'
@@ -272,7 +319,10 @@ def get_recommendations(access_token, seed_tracks=None, seed_artists=None, seed_
         
         print(f"Requesting recommendations with params: {request_params}")
         
-        response = requests.get(url, headers=headers, params=request_params)
+        response = _make_spotify_request(url, headers, params=request_params)
+        
+        if not response:
+            return []
         
         # Handle 404 - recommendations endpoint is deprecated (Nov 2024)
         if response.status_code == 404:
@@ -297,75 +347,14 @@ def get_recommendations(access_token, seed_tracks=None, seed_artists=None, seed_
         print(f"Successfully got {len(recommendations)} recommendations from Spotify")
         return recommendations
         
-    except requests.RequestException as e:
+    except Exception as e:
         print(f"Error getting recommendations: {str(e)}")
         return []
-
-
-def _make_spotify_request(url, headers, params=None, max_retries=3, silent=False):
-    """
-    Make a Spotify API request with retry logic and rate limit handling.
-    
-    Args:
-        url: API endpoint URL
-        headers: Request headers
-        params: Query parameters
-        max_retries: Maximum number of retry attempts
-        silent: If True, suppress non-critical error messages
-    
-    Returns:
-        requests.Response or None if all retries fail
-    """
-    for attempt in range(max_retries):
-        try:
-            response = requests.get(url, headers=headers, params=params, timeout=10)
-            
-            # Handle rate limiting (429 Too Many Requests)
-            if response.status_code == 429:
-                retry_after = int(response.headers.get('Retry-After', 60))
-                if not silent:
-                    print(f"Rate limited (429). Waiting {retry_after}s...")
-                time.sleep(retry_after)
-                continue
-            
-            # Return response for caller to handle (401, 403, 200, etc.)
-            return response
-            
-        except requests.Timeout:
-            if attempt < max_retries - 1:
-                wait_time = 2 ** attempt  # Exponential backoff
-                if not silent:
-                    print(f"Request timeout. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
-            else:
-                if not silent:
-                    print(f"Request timeout after {max_retries} attempts")
-                return None
-        except requests.RequestException as e:
-            if attempt < max_retries - 1:
-                wait_time = 2 ** attempt  # Exponential backoff
-                if not silent:
-                    print(f"Request error: {str(e)}. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
-            else:
-                if not silent:
-                    print(f"Request failed after {max_retries} attempts")
-                return None
-    
-    return None
 
 
 def search_tracks(access_token, query, limit=20):
     """
     Search for tracks on Spotify.
-    
-    Args:
-        access_token: Valid Spotify access token
-        query: Search query string
-        limit: Number of results to return (max 50)
-    
-    Returns:
-        list: List of track dictionaries matching the search
     """
     try:
         url = 'https://api.spotify.com/v1/search'
@@ -376,7 +365,11 @@ def search_tracks(access_token, query, limit=20):
             'limit': min(limit, 50)
         }
         
-        response = requests.get(url, headers=headers, params=params)
+        response = _make_spotify_request(url, headers, params=params)
+        
+        if not response:
+            return []
+            
         response.raise_for_status()
         data = response.json()
         
@@ -388,9 +381,37 @@ def search_tracks(access_token, query, limit=20):
         
         return tracks
         
-    except requests.RequestException as e:
+    except Exception as e:
         print(f"Error searching tracks: {str(e)}")
         return []
+
+
+def get_track(access_token, track_id):
+    """
+    Get a single track by ID.
+    
+    Args:
+        access_token: Valid Spotify access token
+        track_id: Spotify track ID
+    
+    Returns:
+        dict: Normalized track dictionary, or None if failed
+    """
+    try:
+        url = f'https://api.spotify.com/v1/tracks/{track_id}'
+        headers = {'Authorization': f'Bearer {access_token}'}
+        
+        response = _make_spotify_request(url, headers)
+        
+        if not response or response.status_code != 200:
+            return None
+            
+        track = response.json()
+        return normalize_track(track)
+        
+    except Exception as e:
+        print(f"Error getting track {track_id}: {str(e)}")
+        return None
 
 
 def normalize_track(track):
@@ -453,20 +474,14 @@ def normalize_track(track):
 def get_artist_genres(access_token, artist_id):
     """
     Get genres for an artist.
-    
-    Args:
-        access_token: Valid Spotify access token
-        artist_id: Artist ID
-    
-    Returns:
-        list: List of genre strings
     """
     try:
         url = f'https://api.spotify.com/v1/artists/{artist_id}'
         headers = {'Authorization': f'Bearer {access_token}'}
         
-        response = requests.get(url, headers=headers, timeout=5)
-        if response.status_code == 200:
+        response = _make_spotify_request(url, headers)
+        
+        if response and response.status_code == 200:
             artist = response.json()
             genres = artist.get('genres', [])
             if genres:
@@ -484,8 +499,8 @@ def get_artist_genres(access_token, artist_id):
                         'limit': 1
                     }
                     try:
-                        search_response = requests.get(search_url, headers=headers, params=search_params, timeout=5)
-                        if search_response.status_code == 200:
+                        search_response = _make_spotify_request(search_url, headers, params=search_params)
+                        if search_response and search_response.status_code == 200:
                             search_data = search_response.json()
                             search_artists = search_data.get('artists', {}).get('items', [])
                             if search_artists and search_artists[0].get('genres'):
@@ -494,36 +509,29 @@ def get_artist_genres(access_token, artist_id):
                     except:
                         pass
             return genres
-        elif response.status_code == 404:
+        elif response and response.status_code == 404:
             print(f"Artist {artist_id} not found (404) - may be invalid ID")
             return []
         else:
-            print(f"Failed to get artist info for {artist_id}: Status {response.status_code}, Response: {response.text[:100]}")
+            status = response.status_code if response else "Unknown"
+            print(f"Failed to get artist info for {artist_id}: Status {status}")
             return []
     except Exception as e:
         print(f"Error getting artist genres for {artist_id}: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return []
 
 
 def get_track_artists(access_token, track_id):
     """
     Get artist IDs from a track.
-    
-    Args:
-        access_token: Valid Spotify access token
-        track_id: Track ID
-    
-    Returns:
-        list: List of artist IDs
     """
     try:
         url = f'https://api.spotify.com/v1/tracks/{track_id}'
         headers = {'Authorization': f'Bearer {access_token}'}
         
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
+        response = _make_spotify_request(url, headers)
+        
+        if response and response.status_code == 200:
             track = response.json()
             return [artist['id'] for artist in track.get('artists', [])]
         return []
@@ -536,14 +544,6 @@ def get_artist_top_tracks_for_recommendations(access_token, artist_ids, limit=20
     """
     Fallback method: Get top tracks from multiple artists as recommendations.
     Used when recommendations API is not available (client credentials limitation).
-    
-    Args:
-        access_token: Valid Spotify access token
-        artist_ids: List of artist IDs
-        limit: Total number of tracks to return
-    
-    Returns:
-        list: List of track dictionaries
     """
     try:
         all_tracks = []
@@ -554,9 +554,9 @@ def get_artist_top_tracks_for_recommendations(access_token, artist_ids, limit=20
             headers = {'Authorization': f'Bearer {access_token}'}
             params = {'market': 'US'}
             
-            response = requests.get(url, headers=headers, params=params)
+            response = _make_spotify_request(url, headers, params=params)
             
-            if response.status_code == 200:
+            if response and response.status_code == 200:
                 data = response.json()
                 tracks = data.get('tracks', [])
                 
@@ -565,7 +565,8 @@ def get_artist_top_tracks_for_recommendations(access_token, artist_ids, limit=20
                     if normalized:
                         all_tracks.append(normalized)
             else:
-                print(f"Failed to get top tracks for artist {artist_id}: {response.status_code}")
+                status = response.status_code if response else "Unknown"
+                print(f"Failed to get top tracks for artist {artist_id}: {status}")
         
         # Shuffle and limit
         import random
@@ -580,13 +581,6 @@ def get_artist_top_tracks_for_recommendations(access_token, artist_ids, limit=20
 def add_track_to_spotify_library(access_token, track_id):
     """
     Add a track to the user's Spotify library (liked songs).
-    
-    Args:
-        access_token: Valid Spotify access token with user-library-modify scope
-        track_id: Spotify track ID to add
-    
-    Returns:
-        bool: True if successful, False otherwise
     """
     try:
         url = 'https://api.spotify.com/v1/me/tracks'
@@ -596,38 +590,31 @@ def add_track_to_spotify_library(access_token, track_id):
         }
         data = {'ids': [track_id]}
         
-        response = requests.put(url, headers=headers, json=data)
-        response.raise_for_status()
-        return True
+        response = _make_spotify_request(url, headers, json=data, method='PUT')
         
-    except requests.RequestException as e:
+        if response:
+            response.raise_for_status()
+            return True
+        return False
+        
+    except Exception as e:
         print(f"Error adding track to Spotify library: {str(e)}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Response status: {e.response.status_code}")
-            print(f"Response body: {e.response.text}")
         return False
 
 
 def get_artist_info(access_token, artist_id):
     """
     Get artist information by ID.
-    
-    Args:
-        access_token: Valid Spotify access token
-        artist_id: Spotify artist ID
-    
-    Returns:
-        dict: Artist information including name, or None if failed
     """
     try:
         url = f'https://api.spotify.com/v1/artists/{artist_id}'
         headers = {'Authorization': f'Bearer {access_token}'}
         
-        response = requests.get(url, headers=headers, timeout=2)
-        if response.status_code == 200:
+        response = _make_spotify_request(url, headers)
+        
+        if response and response.status_code == 200:
             return response.json()
         return None
     except Exception as e:
         print(f"Error getting artist info: {str(e)}")
         return None
-

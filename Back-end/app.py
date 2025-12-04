@@ -101,7 +101,7 @@ if not app.config['SECRET_KEY']:
         if raw_value:
             print(f"DEBUG: SECRET_KEY after strip length = {len(raw_value.strip())}")
             print(f"DEBUG: SECRET_KEY first 10 chars (repr) = {repr(raw_value[:10])}")
-        raise ValueError("SECRET_KEY environment variable is required in production! Please set SECRET_KEY in your Render environment variables.")
+        raise ValueError("SECRET_KEY environment variable is required in production! Please set SECRET_KEY in your deployment environment variables.")
     else:
         # Development fallback (NOT SECURE - only for local dev)
         app.config['SECRET_KEY'] = secrets.token_urlsafe(32)
