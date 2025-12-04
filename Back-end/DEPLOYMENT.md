@@ -70,7 +70,6 @@ PORT=5000
 ### Build Fails
 - Check build logs in Railway dashboard
 - Verify `requirements.txt` includes all dependencies
-- Ensure `Back-end` is set as the root directory
 
 ### App Crashes
 - Check "Deploy Logs" in Railway
