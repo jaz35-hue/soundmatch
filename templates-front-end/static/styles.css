@@ -159,18 +159,26 @@
     margin-bottom: 12px;
 }
 
-.feature-text { 
+.feature-text {
     color: rgba(255, 255, 255, 0.8);
     font-size: 1em;
     line-height: 1.6;
 }
 
 .auth-page {
-    background: linear-gradient(to bottom, rgb(86, 83, 87), rgb(0, 0, 0));
-    min-height: 100vh;
-    color: white;
-    padding: 100px 20px 40px;
+    box-sizing: border-box;
     position: relative;
+
+    &::after {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(to bottom, rgb(86, 83, 87), rgb(0, 0, 0));
+        z-index: -1;
+    }
 }
 
 .auth-container {
@@ -186,6 +194,8 @@
     padding: 50px 40px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(10px);
+    margin-top: 100px;
+    margin-bottom: 100px;
 }
 
 .auth-title {
@@ -355,7 +365,8 @@
     color: white;
 }
 
-.alert-danger, .alert-error {
+.alert-danger,
+.alert-error {
     background: rgba(255, 0, 0, 0.2);
     border: 2px solid rgba(255, 0, 0, 0.5);
     color: #ff6b6b;
@@ -367,7 +378,8 @@
     color: #ffc107;
 }
 
-.dashboard-page, .saved-page {
+.dashboard-page,
+.saved-page {
     background: linear-gradient(to bottom, rgb(86, 83, 87), rgb(0, 0, 0));
     min-height: 100vh;
     color: white;
@@ -375,7 +387,8 @@
     position: relative;
 }
 
-.dashboard-title, .saved-title {
+.dashboard-title,
+.saved-title {
     position: absolute;
     top: 40px;
     left: 50%;
@@ -482,7 +495,8 @@
     align-items: center;
 }
 
-.spotify-link-btn, .delete-btn {
+.spotify-link-btn,
+.delete-btn {
     background: rgba(255, 255, 255, 0.1);
     border: none;
     border-radius: 8px;
@@ -506,7 +520,9 @@
     transform: scale(1.1);
 }
 
-.no-tracks, .loading, .error {
+.no-tracks,
+.loading,
+.error {
     text-align: center;
     color: rgba(255, 255, 255, 0.7);
     font-size: 1.1em;
@@ -769,34 +785,34 @@
     .home-title {
         font-size: 2.5em;
     }
-    
+
     .home-tagline {
         font-size: 1.2em;
     }
-    
+
     .home-features {
         grid-template-columns: 1fr;
         gap: 20px;
     }
-    
+
     .auth-card {
         padding: 40px 30px;
     }
-    
+
     .auth-title {
         font-size: 2em;
         margin-bottom: 10px;
     }
-    
+
     .auth-subtitle {
         font-size: 1em;
     }
-    
+
     .nav-link {
         padding: 8px 15px;
         font-size: 0.9em;
     }
-    
+
     .auth-form-heading {
         font-size: 1.5em;
     }
@@ -1092,10 +1108,11 @@
         z-index: -1;
         font-family: Arial, sans-serif;
     }
-    
+
 }
 
-.nav-back-btn, .nav-profile-btn {
+.nav-back-btn,
+.nav-profile-btn {
     position: fixed;
     top: 1rem;
     z-index: 100;
@@ -1121,7 +1138,8 @@
     right: 1rem;
 }
 
-.nav-back-btn:hover, .nav-profile-btn:hover {
+.nav-back-btn:hover,
+.nav-profile-btn:hover {
     background: rgba(255, 255, 255, 0.2);
     transform: scale(1.05);
 }
@@ -1483,40 +1501,49 @@
 }
 
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* Responsive Design for Discover and Recommendations */
 @media (max-width: 768px) {
-    .discover-title, .recommendations-title, .home-title {
+
+    .discover-title,
+    .recommendations-title,
+    .home-title {
         font-size: 2em;
     }
-    
+
     .home-features {
         grid-template-columns: 1fr;
     }
-    
+
     .auth-card {
         padding: 40px 25px;
     }
-    
+
     .album-art {
         width: 250px;
         height: 250px;
     }
-    
+
     .track-name {
         font-size: 1.5em;
     }
-    
+
     .tracks-container {
         grid-template-columns: 1fr;
     }
-    
-    .nav-back-btn, .nav-profile-btn, .nav-link {
+
+    .nav-back-btn,
+    .nav-profile-btn,
+    .nav-link {
         padding: 8px 12px;
         font-size: 0.9em;
     }
 }
-
