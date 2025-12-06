@@ -59,9 +59,14 @@ STATIC_DIR = FRONTEND_DIR / "static"
 INSTANCE_DIR = BASE_DIR / "instance"
 
 # Ensure expected directories exist so deployments work out of the box
-FRONTEND_DIR.mkdir(parents=True, exist_ok=True)
-STATIC_DIR.mkdir(parents=True, exist_ok=True)
-INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    FRONTEND_DIR.mkdir(parents=True, exist_ok=True)
+    STATIC_DIR.mkdir(parents=True, exist_ok=True)
+    INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
+except PermissionError:
+    # On Vercel (Read-Only Filesystem), we can't create directories.
+    # This is fine as long as we don't try to write to them later.
+    print("WARNING: Read-only filesystem detected. Skipping directory creation.")
 
 # Debug: Print template directory location
 # Debug: Print template directory location
@@ -163,6 +168,13 @@ else:
 
 bcrypt = Bcrypt(app)
 db = SQLAlchemy(app)
+
+# On Vercel with ephemeral SQLite, we must create tables immediately
+# because init_db() in __main__ is never called.
+if os.environ.get('VERCEL') and not database_url:
+    with app.app_context():
+        db.create_all()
+        print("Created ephemeral SQLite tables in /tmp")
 
 # Setup Flask-Limiter for rate limiting
 limiter = Limiter(
