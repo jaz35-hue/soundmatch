@@ -60,11 +60,12 @@ STATIC_DIR.mkdir(parents=True, exist_ok=True)
 INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Debug: Print template directory location
-print(f"📁 Template directory: {FRONTEND_DIR}")
-print(f"📁 Template directory exists: {FRONTEND_DIR.exists()}")
+# Debug: Print template directory location
+print(f"Template directory: {FRONTEND_DIR}")
+print(f"Template directory exists: {FRONTEND_DIR.exists()}")
 if FRONTEND_DIR.exists():
     templates = list(FRONTEND_DIR.glob("*.html"))
-    print(f"📁 Found {len(templates)} HTML templates: {[t.name for t in templates]}")
+    print(f"Found {len(templates)} HTML templates: {[t.name for t in templates]}")
 
 app = Flask(
     __name__,
@@ -105,7 +106,7 @@ if not app.config['SECRET_KEY']:
     else:
         # Development fallback (NOT SECURE - only for local dev)
         app.config['SECRET_KEY'] = secrets.token_urlsafe(32)
-        print("⚠️  WARNING: Using auto-generated SECRET_KEY. Set SECRET_KEY environment variable for production!")
+        print("WARNING: Using auto-generated SECRET_KEY. Set SECRET_KEY environment variable for production!")
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # Suppress deprecation warning
 db_path = BASE_DIR / 'database.db'
@@ -133,9 +134,20 @@ if not db_path.exists() and instance_db_path.exists():
         # ignore copy errors; DB creation will proceed later
         pass
 
-# Database configuration - SQLite only
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
-print(f"Using SQLite database: {db_path}")
+# Database configuration
+# Check for DATABASE_URL environment variable (used by Vercel/Postgres)
+database_url = os.environ.get('DATABASE_URL')
+
+if database_url:
+    # Fix for SQLAlchemy requiring 'postgresql://' instead of 'postgres://'
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+    print(f"Using database from environment variable")
+else:
+    # Fallback to SQLite for local development
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
+    print(f"Using SQLite database: {db_path}")
 
 bcrypt = Bcrypt(app)
 db = SQLAlchemy(app)
@@ -310,20 +322,20 @@ def check_and_update_schema():
             
             if missing_columns:
                 print(f"Missing columns detected: {missing_columns}")
-                print("⚠️  Recreating database with updated schema...")
-                print("⚠️  WARNING: This will delete all existing user data!")
+                print("Recreating database with updated schema...")
+                print("WARNING: This will delete all existing user data!")
                 
                 # Drop and recreate the table
                 try:
                     db.drop_all()
                     db.create_all()
-                    print("✅ Database schema updated successfully!")
+                    print("Database schema updated successfully!")
                     return True
                 except Exception as e:
-                    print(f"❌ Error recreating tables: {str(e)}")
+                    print(f"Error recreating tables: {str(e)}")
                     return False
             else:
-                print("✅ Database schema is up to date.")
+                print("Database schema is up to date.")
                 return True
         return True
 
