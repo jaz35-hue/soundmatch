@@ -26,6 +26,10 @@ from wtforms import PasswordField, StringField, SubmitField
 from wtforms.validators import InputRequired, Length, Regexp, ValidationError
 
 # Local imports
+import sys
+# Add the current directory to sys.path to ensure local imports work on Vercel
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from spotify_api import (
     add_track_to_spotify_library,
     get_user_recently_played,
@@ -131,9 +135,7 @@ if not db_path.exists() and instance_db_path.exists():
     try:
         shutil.copy2(instance_db_path, db_path)
     except Exception:
-        # ignore copy errors; DB creation will proceed later
         pass
-
 # Database configuration
 # Check for DATABASE_URL environment variable (used by Vercel/Postgres)
 database_url = os.environ.get('DATABASE_URL')
@@ -145,7 +147,17 @@ if database_url:
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     print(f"Using database from environment variable")
 else:
-    # Fallback to SQLite for local development
+    # Fallback to SQLite
+    # Check if running on Vercel (read-only filesystem)
+    if os.environ.get('VERCEL'):
+        # Use /tmp directory for ephemeral database
+        import tempfile
+        db_path = Path(tempfile.gettempdir()) / 'database.db'
+        print("WARNING: Running on Vercel without DATABASE_URL. Using ephemeral SQLite in /tmp. Data will be lost on restart.")
+    else:
+        # Local development
+        db_path = BASE_DIR / 'database.db'
+    
     app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
     print(f"Using SQLite database: {db_path}")
 
@@ -449,6 +461,10 @@ def load_user(user_id):
 def home():
     return render_template('home.html') 
 
+
+@app.route('/ping')
+def ping():
+    return "pong", 200
 
 # =============================================================================
 # Authentication Routes
