@@ -33,7 +33,8 @@ from spotify_api import (
     get_user_top_tracks,
     get_valid_spotify_token,
     normalize_track,
-    search_tracks
+    search_tracks,
+    get_app_token
 )
 
 load_dotenv()
@@ -60,11 +61,11 @@ STATIC_DIR.mkdir(parents=True, exist_ok=True)
 INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Debug: Print template directory location
-print(f"📁 Template directory: {FRONTEND_DIR}")
-print(f"📁 Template directory exists: {FRONTEND_DIR.exists()}")
+print(f"[DEBUG] Template directory: {FRONTEND_DIR}")
+print(f"[DEBUG] Template directory exists: {FRONTEND_DIR.exists()}")
 if FRONTEND_DIR.exists():
     templates = list(FRONTEND_DIR.glob("*.html"))
-    print(f"📁 Found {len(templates)} HTML templates: {[t.name for t in templates]}")
+    print(f"[DEBUG] Found {len(templates)} HTML templates: {[t.name for t in templates]}")
 
 app = Flask(
     __name__,
@@ -1526,33 +1527,16 @@ def public_search_tracks():
 def public_get_genres():
     """Get list of available genre seeds for recommendations."""
     try:
-        # Get best available token
-        token, using_user_token = get_spotify_token()
-        if using_user_token:
-            print(f"Using Spotify token for logged-in user: {current_user.username}")
+        user_id = current_user.username if current_user.is_authenticated else "Anonymous"
+        print(f"Getting genres for user: {user_id}")
         
-        if not token:
-            # If we can't get any token, use fallback genres
-            genres = get_fallback_genres()
-            return jsonify({
-                'genres': genres,
-                'count': len(genres),
-                'using_fallback': True,
-                'note': 'Using fallback genres (Failed to authenticate with Spotify)'
-            }), 200
-        
-        # Genre seeds endpoint is deprecated (Nov 2024) - use fallback immediately
-        # No need to try the API call
+        # Try to get hardcoded fallback genres first (fastest)
         genres = get_fallback_genres()
-        using_fallback = True
-        print(f"Using fallback genre list with {len(genres)} genres (Genre seeds endpoint deprecated)")
-        
         return jsonify({
             'genres': genres,
             'count': len(genres),
-            'using_fallback': using_fallback,
-            'using_user_token': using_user_token,
-            'note': 'Using fallback genres (Spotify API requires user authentication for genre seeds)' if using_fallback else None
+            'using_fallback': True,
+            'note': 'Using fallback genres (Default)'
         }), 200
         
     except Exception as e:
@@ -1919,23 +1903,20 @@ def public_get_recommendation_history():
 def get_spotify_token():
     """
     Get the best available Spotify token (user token if logged in, otherwise app token).
-    This helper function reduces code duplication across endpoints.
     
     Returns:
-        tuple: (token, using_user_token) or (None, False) if failed
+        tuple: (token, type) or (None, None)
     """
-    # Try to use user's Spotify token if logged in
-    if current_user.is_authenticated:
-        user_token = get_valid_spotify_token(current_user)
-        if user_token:
-            return user_token, True
-    
-    # Fall back to app access token
-    app_token = get_app_access_token()
-    if app_token:
-        return app_token, False
-    
-    return None, False
+    if current_user.is_authenticated and current_user.auth_provider == 'spotify':
+        token = get_valid_spotify_token(current_user)
+        if token:
+            return token, 'user'
+            
+    token = get_app_token()
+    if token:
+        return token, 'app'
+        
+    return None, None
 
 
 def extract_track_data(rec):
@@ -2228,6 +2209,14 @@ def internal_error(error):
     error_trace = traceback.format_exc()
     print(f"500 Error: {str(error)}")
     print(f"Traceback: {error_trace}")
+    
+    # Return JSON for API routes
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'error': 'Internal Server Error',
+            'details': str(error) if app.debug else 'An unexpected error occurred'
+        }), 500
+        
     flash('An internal server error occurred. Please try again later.', 'danger')
     return redirect(url_for('home')), 500
 

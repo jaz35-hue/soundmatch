@@ -19,6 +19,49 @@ _app_token_cache = {
 # Token Management
 # =============================================================================
 
+def get_app_token():
+    """
+    Get a client credentials token for general API usage (not user-specific).
+    Used for general search and public data when no user is logged in.
+    """
+    global _app_token_cache
+    
+    # Check cache
+    if _app_token_cache['token'] and _app_token_cache['expires_at']:
+        if datetime.now() < _app_token_cache['expires_at'] - timedelta(minutes=5):
+            return _app_token_cache['token']
+            
+    # Request new token
+    try:
+        token_url = 'https://accounts.spotify.com/api/token'
+        client_id = current_app.config.get('SPOTIFY_CLIENT_ID')
+        client_secret = current_app.config.get('SPOTIFY_CLIENT_SECRET')
+        
+        if not client_id or not client_secret:
+            print("Missing Spotify credentials in config for App Token")
+            return None
+            
+        data = {
+            'grant_type': 'client_credentials',
+            'client_id': client_id,
+            'client_secret': client_secret
+        }
+        
+        response = requests.post(token_url, data=data)
+        response.raise_for_status()
+        token_info = response.json()
+        
+        _app_token_cache['token'] = token_info['access_token']
+        _app_token_cache['expires_at'] = datetime.now() + timedelta(seconds=token_info['expires_in'])
+        
+        print("[OK] New App Token generated")
+        return _app_token_cache['token']
+        
+    except Exception as e:
+        print(f"Error getting App Token: {str(e)}")
+        return None
+
+
 def get_valid_spotify_token(user):
     """
     Get a valid Spotify access token for the user.
