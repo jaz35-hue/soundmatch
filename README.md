@@ -48,7 +48,7 @@ A music recommendation web application that helps users discover new music based
 ## Documentation
 
 - **Setup Guide**: `Back-end/SETUP.md` - Complete setup instructions
-- **Deployment Guide**: `Back-end/DEPLOYMENT.md` - Deployment instructions for Railway
+- **Deployment Guide**: `Back-end/DEPLOYMENT.md` - Deployment instructions for Render & Railway
 
 ## Requirements
 

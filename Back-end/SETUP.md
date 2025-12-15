@@ -121,5 +121,9 @@ python -c "import os; from dotenv import load_dotenv; load_dotenv(); print('SPOT
 - Ensure all dependencies are installed: `pip install -r requirements.txt`
 - Check Python version (3.8+ required)
 
+## Deployment
+
+For instructions on deploying to **Render** or **Railway**, please refer to [DEPLOYMENT.md](DEPLOYMENT.md).
+
 
 
