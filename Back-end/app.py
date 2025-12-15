@@ -1575,7 +1575,7 @@ def public_get_recommendations():
         
         # Get best available token
         token, using_user_token = get_spotify_token()
-        if using_user_token:
+        if using_user_token and current_user.is_authenticated:
             print(f"Using Spotify token for logged-in user: {current_user.username}")
         
         if not token:
@@ -2102,7 +2102,8 @@ def save_recommendations_to_history(recommendations, seed_artists=None, seed_gen
         
         if saved_count > 0:
             db.session.commit()
-            print(f"Saved {saved_count} recommendations to history for user {current_user.username}")
+            username = current_user.username if current_user.is_authenticated else "Anonymous"
+            print(f"Saved {saved_count} recommendations to history for user {username}")
     except Exception as e:
         db.session.rollback()
         import traceback
